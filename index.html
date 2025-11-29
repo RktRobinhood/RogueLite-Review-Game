@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Universal Review Rogue</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root { --bg:#15151a; --panel:#202028; --gold:#f1c40f; --text:#ecf0f1; --green:#27ae60; --red:#c0392b; --blue:#2980b9; }
+        @font-face { font-family: 'Retro'; src: local('Courier New'), monospace; }
+        body { margin:0; overflow:hidden; background:var(--bg); font-family:'Segoe UI',Tahoma,sans-serif; color:var(--text); touch-action:none; user-select:none; }
+        
+        /* --- UTILS --- */
+        .screen { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; overflow:hidden; }
+        .hidden { display:none !important; }
+        .center { display:flex; align-items:center; justify-content:center; }
+        
+        /* --- MENU --- */
+        .menu-container { width:90%; max-width:500px; margin:0 auto; text-align:center; display:flex; flex-direction:column; gap:10px; height: 100%; justify-content: center;}
+        .stat-row { display:flex; justify-content:space-between; background:var(--panel); padding:10px; border-radius:8px; border:1px solid #444; }
+        
+        .mode-btn { padding:20px; font-size:1.2rem; background:var(--green); border:none; border-radius:8px; color:white; font-weight:bold; cursor:pointer; width:100%; position: relative; overflow: hidden; }
+        .mode-btn.locked { background:#444; color:#888; cursor:not-allowed; }
+        .lock-icon { position:absolute; right:10px; font-size:1.5rem; }
+        
+        /* --- SETTINGS (Dynamic) --- */
+        #settingsArea { flex-grow:1; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; text-align:left; margin:10px 0; }
+        .subject-group { margin-bottom:15px; }
+        .subject-title { font-weight:bold; color:var(--gold); border-bottom:1px solid #555; margin-bottom:5px; }
+        .topic-toggle { display:flex; justify-content:space-between; padding:8px; background:#2a2a35; margin-bottom:2px; border-radius:4px; cursor:pointer;}
+        .topic-toggle.active { background:var(--blue); }
+        
+        /* --- GAME HUD --- */
+        #gameHUD { height:60px; display:flex; justify-content:space-between; align-items:center; padding:0 20px; background:rgba(0,0,0,0.4); }
+        #qArea { flex-grow:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; font-size:1.3rem; text-align:center; overflow-y:auto; }
+        
+        /* --- INPUT AREAS --- */
+        #inputContainer { height:40%; background:var(--panel); display:flex; flex-direction:column; }
+        
+        /* Type: Choice */
+        .choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px; height:100%; }
+        .ans-btn { background:#34495e; color:white; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; }
+        
+        /* Type: Match */
+        .match-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; height:100%; }
+        .match-item { background:#333; display:flex; align-items:center; justify-content:center; border-radius:5px; cursor:pointer; font-size:0.9rem; padding:5px; border:2px solid transparent; }
+        .match-item.selected { border-color:var(--gold); background:#444; }
+        .match-item.solved { opacity:0; pointer-events:none; }
+
+        /* Type: Blank */
+        .word-bank { display:flex; flex-wrap:wrap; gap:10px; padding:15px; justify-content:center; }
+        .word-chip { background:var(--blue); padding:10px 20px; border-radius:20px; cursor:pointer; }
+        .blank-slot { border-bottom:2px solid white; padding:0 10px; color:var(--gold); min-width:50px; display:inline-block; text-align:center;}
+    </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loader" class="screen center" style="background:#000; z-index:1000;">
+    <h2 style="color:var(--green)">LOADING LIBRARY...</h2>
+    <div id="loadLog" style="color:#777; font-size:0.8rem;">Fetching manifest...</div>
+</div>
+
+<!-- MENU -->
+<div id="menuScreen" class="screen hidden">
+    <div class="menu-container">
+        <h1>KNOWLEDGE ROGUE</h1>
+        
+        <div class="stat-row">
+            <div>🪙 <span id="menuGold">0</span></div>
+            <div>🏆 Best: <span id="menuBest">0</span></div>
+        </div>
+
+        <!-- DYNAMIC SETTINGS -->
+        <div id="settingsArea">
+            <!-- Populated by JS based on loaded files -->
+        </div>
+
+        <!-- GAME MODES -->
+        <button class="mode-btn" onclick="startGame('standard')">
+            START RUN
+            <div style="font-size:0.8rem; opacity:0.8">Standard Mix</div>
+        </button>
+
+        <button id="btnBossRush" class="mode-btn locked" onclick="startGame('boss')">
+            BOSS RUSH
+            <div style="font-size:0.8rem; opacity:0.8">Only Bosses & Mini-Bosses</div>
+            <div class="lock-icon">🔒</div>
+        </button>
+        
+        <div id="unlockMsg" style="color:#777; font-size:0.8rem;">Reach Score 70 to unlock Boss Rush</div>
+    </div>
+</div>
+
+<!-- GAME -->
+<div id="gameScreen" class="screen hidden">
+    <div id="gameHUD">
+        <span id="hudLives">❤️❤️❤️</span>
+        <span id="hudScore">0</span>
+        <span id="hudGold" style="color:var(--gold)">0g</span>
+    </div>
+    <div style="height:5px; background:#333;"><div id="timerBar" style="height:100%; width:100%; background:var(--green);"></div></div>
+    
+    <div id="qArea">
+        <div id="bossTag" style="display:none; color:var(--red); font-weight:bold;">⚠️ BOSS ⚠️</div>
+        <div id="qText">Loading...</div>
+    </div>
+    
+    <div id="inputContainer">
+        <!-- Injected by Question Type -->
+    </div>
+</div>
+
+<script>
+/* ================= GAME ENGINE ================= */
+const Game = {
+    pool: [], // All loaded questions
+    activeDeck: [], // Filtered by settings
+    state: { hp:3, score:0, gold:0, mode:'standard' },
+    settings: {}, // { "Subject_Topic": true/false }
+    player: { gold:0, best:0, unlocks:[] },
+    
+    // 1. LOADER
+    async init() {
+        this.loadSave();
+        try {
+            const resp = await fetch('library.json');
+            const manifest = await resp.json();
+            let loaded = 0;
+            for(let item of manifest) {
+                document.getElementById('loadLog').innerText = `Loading ${item.name}...`;
+                await this.loadScript(item.file);
+                loaded++;
+            }
+            this.buildMenu();
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('menuScreen').classList.remove('hidden');
+        } catch(e) {
+            alert("Error loading library.json. Ensure files are in place.");
+            console.error(e);
+        }
+    },
+
+    loadScript(src) {
+        return new Promise((resolve, reject) => {
+            let s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.body.appendChild(s);
+        });
+    },
+
+    // Called by external files to register content
+    addPack(pack) {
+        // pack.questions is array of { subject, topic, type, gen/data }
+        // We flatten them into the main pool with unique IDs
+        pack.questions.forEach(q => {
+            q._origin = pack.name;
+            this.pool.push(q);
+        });
+        console.log(`Loaded ${pack.name}: ${pack.questions.length} items`);
+    },
+
+    // 2. MENU & SETTINGS
+    buildMenu() {
+        const container = document.getElementById('settingsArea');
+        container.innerHTML = "";
+        
+        // Group by Subject -> Topic
+        let tree = {};
+        this.pool.forEach(q => {
+            if(!tree[q.subject]) tree[q.subject] = new Set();
+            tree[q.subject].add(q.topic);
+        });
+
+        for(let subj in tree) {
+            let div = document.createElement('div');
+            div.className = 'subject-group';
+            div.innerHTML = `<div class="subject-title">${subj}</div>`;
+            
+            tree[subj].forEach(topic => {
+                let key = `${subj}_${topic}`;
+                // Default to true if new
+                if(this.settings[key] === undefined) this.settings[key] = true;
+                
+                let btn = document.createElement('div');
+                btn.className = `topic-toggle ${this.settings[key] ? 'active' : ''}`;
+                btn.innerText = topic;
+                btn.onclick = () => {
+                    this.settings[key] = !this.settings[key];
+                    btn.className = `topic-toggle ${this.settings[key] ? 'active' : ''}`;
+                    this.saveData();
+                };
+                div.appendChild(btn);
+            });
+            container.appendChild(div);
+        }
+
+        // Update UI
+        document.getElementById('menuGold').innerText = this.player.gold;
+        document.getElementById('menuBest').innerText = this.player.best;
+        
+        // Handle Unlock
+        const bossBtn = document.getElementById('btnBossRush');
+        const msg = document.getElementById('unlockMsg');
+        if(this.player.best >= 70) {
+            bossBtn.classList.remove('locked');
+            bossBtn.onclick = () => this.start('boss');
+            bossBtn.querySelector('.lock-icon').innerText = "⚔️";
+            msg.innerText = "Mode Unlocked!";
+            msg.style.color = "var(--green)";
+        }
+    },
+
+    // 3. GAME LOOP
+    start(mode) {
+        // Filter Deck
+        this.activeDeck = this.pool.filter(q => this.settings[`${q.subject}_${q.topic}`]);
+        if(this.activeDeck.length === 0) return alert("Select at least one topic!");
+        
+        this.state = { hp:3, score:0, gold:0, mode: mode, time:30 };
+        document.getElementById('menuScreen').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        this.nextQ();
+    },
+
+    nextQ() {
+        // Simple Loop for now
+        if(this.state.hp <= 0) return this.gameOver();
+        
+        // Pick random question from filtered deck
+        let template = this.activeDeck[Math.floor(Math.random() * this.activeDeck.length)];
+        
+        // GENERATE CONTENT
+        let content = null;
+        if(template.gen) {
+            // Dynamic (Math)
+            content = template.gen(false); // isBoss?
+        } else {
+            // Static (History/Psych)
+            content = template.data;
+        }
+
+        this.renderQ(template.type, content);
+    },
+
+    renderQ(type, content) {
+        const qText = document.getElementById('qText');
+        const inp = document.getElementById('inputContainer');
+        inp.innerHTML = ""; // Clear
+        
+        // Render Question
+        qText.innerHTML = content.q;
+        if(window.MathJax) MathJax.typesetPromise([qText]);
+
+        // Render Inputs
+        if(type === 'choice') {
+            inp.innerHTML = `<div class="choice-grid"></div>`;
+            let grid = inp.querySelector('.choice-grid');
+            // Get unique options logic here (simplified)
+            let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
+            
+            opts.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'ans-btn';
+                btn.innerText = opt; // Need mathjax check here
+                btn.onclick = () => this.check(opt == content.a);
+                grid.appendChild(btn);
+            });
+            if(window.MathJax) MathJax.typesetPromise([grid]);
+        } 
+        else if(type === 'match') {
+            // content.pairs = [{left:'A', right:'B'}, ...]
+            inp.innerHTML = `<div class="match-grid"></div>`;
+            let grid = inp.querySelector('.match-grid');
+            let lefts = [], rights = [];
+            content.pairs.forEach((p, i) => {
+                lefts.push({txt:p.left, id:i});
+                rights.push({txt:p.right, id:i});
+            });
+            lefts.sort(()=>Math.random()-0.5);
+            rights.sort(()=>Math.random()-0.5);
+
+            let selected = null;
+            let solvedCount = 0;
+            
+            const checkPair = (side, item, el) => {
+                if(el.classList.contains('solved')) return;
+                
+                if(selected) {
+                    if(selected.side === side) {
+                        // Switch selection
+                        document.querySelectorAll('.match-item').forEach(x=>x.classList.remove('selected'));
+                        el.classList.add('selected');
+                        selected = {side, item, el};
+                    } else {
+                        // Check Match
+                        if(selected.item.id === item.id) {
+                            // Match!
+                            el.classList.add('solved');
+                            selected.el.classList.add('solved');
+                            selected = null;
+                            solvedCount++;
+                            if(solvedCount >= content.pairs.length) this.check(true);
+                        } else {
+                            // Fail
+                            this.check(false);
+                        }
+                    }
+                } else {
+                    el.classList.add('selected');
+                    selected = {side, item, el};
+                }
+            };
+
+            // Render
+            // Simple interleaving for visual 2-col layout
+            for(let i=0; i<lefts.length; i++) {
+                let l = document.createElement('div'); l.className='match-item'; l.innerText=lefts[i].txt;
+                l.onclick = ()=>checkPair('L', lefts[i], l);
+                
+                let r = document.createElement('div'); r.className='match-item'; r.innerText=rights[i].txt;
+                r.onclick = ()=>checkPair('R', rights[i], r);
+                
+                grid.appendChild(l); grid.appendChild(r);
+            }
+        }
+        else if(type === 'blank') {
+            // "The _1_ is the powerhouse of the _2_"
+            // content.q has '___'
+            let parts = content.q.split('___');
+            let html = "";
+            parts.forEach((p,i) => {
+                html += p;
+                if(i < parts.length-1) html += `<span class="blank-slot" id="slot_${i}">?</span>`;
+            });
+            qText.innerHTML = html;
+            
+            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5); // Simplified for single blank
+            let div = document.createElement('div'); div.className = 'word-bank';
+            bank.forEach(w => {
+                let b = document.createElement('div'); b.className='word-chip'; b.innerText=w;
+                b.onclick = () => {
+                    // Simple single blank logic
+                    if(w == content.a) this.check(true);
+                    else this.check(false);
+                };
+                div.appendChild(b);
+            });
+            inp.appendChild(div);
+        }
+    },
+
+    check(isCorrect) {
+        if(isCorrect) {
+            this.state.score++;
+            this.nextQ();
+        } else {
+            this.state.hp--;
+            document.getElementById('hudLives').innerText = "❤️".repeat(this.state.hp);
+            document.body.style.background = "#500";
+            setTimeout(()=>document.body.style.background="var(--bg)", 200);
+            if(this.state.hp<=0) this.gameOver();
+            else this.nextQ();
+        }
+        document.getElementById('hudScore').innerText = this.state.score;
+    },
+
+    gameOver() {
+        if(this.state.score > this.player.best) this.player.best = this.state.score;
+        this.saveData();
+        alert("Game Over! Score: " + this.state.score);
+        location.reload();
+    },
+
+    loadSave() {
+        let d = localStorage.getItem('universalRogue');
+        if(d) {
+            let p = JSON.parse(d);
+            this.player = p.player || this.player;
+            this.settings = p.settings || this.settings;
+        }
+    },
+    saveData() {
+        localStorage.setItem('universalRogue', JSON.stringify({
+            player: this.player,
+            settings: this.settings
+        }));
+    }
+};
+
+window.onload = () => Game.init();
+</script>
+</body>
+</html>
