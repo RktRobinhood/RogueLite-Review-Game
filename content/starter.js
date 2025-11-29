@@ -2,7 +2,7 @@ Game.addPack({
     id: "starter_pack_01",
     name: "Starter Content",
     questions: [
-        // --- NEW TYPE: MATCHING (Psychology Example) ---
+        // --- Psychology (Static) ---
         {
             subject: "Psychology",
             topic: "Biological",
@@ -17,7 +17,7 @@ Game.addPack({
                 ]
             }
         },
-        // --- NEW TYPE: BLANK (TOK Example) ---
+        // --- TOK (Static) ---
         {
             subject: "TOK",
             topic: "Core",
@@ -28,7 +28,7 @@ Game.addPack({
                 w: ["Truth", "Wisdom", "Evidence", "Perspective"]
             }
         },
-        // --- OLD TYPE: MATH (Dynamic) ---
+        // --- Math (Dynamic with LaTeX) ---
         {
             subject: "IB Math AA",
             topic: "Algebra",

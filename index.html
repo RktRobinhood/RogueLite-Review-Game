@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Universal Review Rogue</title>
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
         :root { --bg:#15151a; --panel:#202028; --gold:#f1c40f; --text:#ecf0f1; --green:#27ae60; --red:#c0392b; --blue:#2980b9; }
@@ -77,13 +83,11 @@
         </div>
 
         <!-- GAME MODES -->
-        <!-- FIX: Changed onclick from startGame to Game.start -->
         <button class="mode-btn" onclick="Game.start('standard')">
             START RUN
             <div style="font-size:0.8rem; opacity:0.8">Standard Mix</div>
         </button>
 
-        <!-- FIX: Changed onclick from startGame to Game.start -->
         <button id="btnBossRush" class="mode-btn locked" onclick="Game.start('boss')">
             BOSS RUSH
             <div style="font-size:0.8rem; opacity:0.8">Only Bosses & Mini-Bosses</div>
@@ -116,10 +120,10 @@
 <script>
 /* ================= GAME ENGINE ================= */
 const Game = {
-    pool: [], // All loaded questions
-    activeDeck: [], // Filtered by settings
+    pool: [], 
+    activeDeck: [],
     state: { hp:3, score:0, gold:0, mode:'standard', time:30 },
-    settings: {}, // { "Subject_Topic": true/false }
+    settings: {}, 
     player: { gold:0, best:0, unlocks:[] },
     
     // 1. LOADER
@@ -128,11 +132,9 @@ const Game = {
         try {
             const resp = await fetch('library.json');
             const manifest = await resp.json();
-            let loaded = 0;
             for(let item of manifest) {
                 document.getElementById('loadLog').innerText = `Loading ${item.name}...`;
                 await this.loadScript(item.file);
-                loaded++;
             }
             this.buildMenu();
             document.getElementById('loader').classList.add('hidden');
@@ -153,9 +155,7 @@ const Game = {
         });
     },
 
-    // Called by external files to register content
     addPack(pack) {
-        // pack.questions is array of { subject, topic, type, gen/data }
         pack.questions.forEach(q => {
             q._origin = pack.name;
             this.pool.push(q);
@@ -168,7 +168,6 @@ const Game = {
         const container = document.getElementById('settingsArea');
         container.innerHTML = "";
         
-        // Group by Subject -> Topic
         let tree = {};
         this.pool.forEach(q => {
             if(!tree[q.subject]) tree[q.subject] = new Set();
@@ -182,7 +181,6 @@ const Game = {
             
             tree[subj].forEach(topic => {
                 let key = `${subj}_${topic}`;
-                // Default to true if new
                 if(this.settings[key] === undefined) this.settings[key] = true;
                 
                 let btn = document.createElement('div');
@@ -198,11 +196,9 @@ const Game = {
             container.appendChild(div);
         }
 
-        // Update UI
         document.getElementById('menuGold').innerText = this.player.gold;
         document.getElementById('menuBest').innerText = this.player.best;
         
-        // Handle Unlock
         const bossBtn = document.getElementById('btnBossRush');
         const msg = document.getElementById('unlockMsg');
         if(this.player.best >= 70) {
@@ -216,7 +212,6 @@ const Game = {
 
     // 3. GAME LOOP
     start(mode) {
-        // Filter Deck
         this.activeDeck = this.pool.filter(q => this.settings[`${q.subject}_${q.topic}`]);
         if(this.activeDeck.length === 0) return alert("Select at least one topic!");
         
@@ -229,54 +224,57 @@ const Game = {
     nextQ() {
         if(this.state.hp <= 0) return this.gameOver();
         
-        // Pick random question
         let template = this.activeDeck[Math.floor(Math.random() * this.activeDeck.length)];
         
-        // GENERATE CONTENT
         let content = null;
-        try {
-            if(template.gen) {
-                // Dynamic (Math)
-                content = template.gen(false); 
-            } else {
-                // Static (History/Psych)
-                content = template.data;
-            }
-        } catch(e) {
-            console.error("Gen Error", e);
-            return this.nextQ(); // Retry if gen fails
+        if(template.gen) {
+            content = template.gen(false); 
+        } else {
+            content = template.data;
         }
 
         this.renderQ(template.type, content);
     },
 
+    // HELPER: FORMAT MATH TEXT
+    formatMath(text) {
+        let str = text.toString();
+        // If it contains LaTeX symbols like \ or ^ or _, wrap it in $$
+        if(str.match(/[\\^_{}]/) || str.includes('log') || str.includes('sin') || str.includes('pi')) {
+            return `$$ ${str} $$`;
+        }
+        return str;
+    },
+
     renderQ(type, content) {
         const qText = document.getElementById('qText');
         const inp = document.getElementById('inputContainer');
-        inp.innerHTML = ""; // Clear
+        inp.innerHTML = ""; 
         
-        // Render Question
-        qText.innerHTML = content.q;
+        // Format Question Text
+        qText.innerHTML = this.formatMath(content.q);
+        
+        // Force MathJax to render
         if(window.MathJax) MathJax.typesetPromise([qText]);
 
         // Render Inputs
         if(type === 'choice') {
             inp.innerHTML = `<div class="choice-grid"></div>`;
             let grid = inp.querySelector('.choice-grid');
-            
             let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
             
             opts.forEach(opt => {
                 let btn = document.createElement('button');
                 btn.className = 'ans-btn';
-                // Check if math formatting needed
-                let txt = opt.toString();
-                if(txt.match(/[\^\\_=<>\/]/)) btn.innerHTML = `\\(${txt}\\)`;
-                else btn.innerText = txt;
                 
+                // Render math in buttons too
+                let optText = this.formatMath(opt);
+                btn.innerHTML = optText;
+
                 btn.onclick = () => this.check(opt == content.a);
                 grid.appendChild(btn);
             });
+            // Force MathJax on buttons
             if(window.MathJax) MathJax.typesetPromise([grid]);
         } 
         else if(type === 'match') {
@@ -298,21 +296,17 @@ const Game = {
                 
                 if(selected) {
                     if(selected.side === side) {
-                        // Switch selection
                         document.querySelectorAll('.match-item').forEach(x=>x.classList.remove('selected'));
                         el.classList.add('selected');
                         selected = {side, item, el};
                     } else {
-                        // Check Match
                         if(selected.item.id === item.id) {
-                            // Match!
                             el.classList.add('solved');
                             selected.el.classList.add('solved');
                             selected = null;
                             solvedCount++;
                             if(solvedCount >= content.pairs.length) this.check(true);
                         } else {
-                            // Fail
                             this.check(false);
                         }
                     }
@@ -341,7 +335,7 @@ const Game = {
             });
             qText.innerHTML = html;
             
-            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5);
+            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5); 
             let div = document.createElement('div'); div.className = 'word-bank';
             bank.forEach(w => {
                 let b = document.createElement('div'); b.className='word-chip'; b.innerText=w;
@@ -362,10 +356,8 @@ const Game = {
         } else {
             this.state.hp--;
             document.getElementById('hudLives').innerText = "❤️".repeat(this.state.hp);
-            // Visual Damage
             document.body.style.background = "#500";
             setTimeout(()=>document.body.style.background="var(--bg)", 200);
-            
             if(this.state.hp<=0) this.gameOver();
             else this.nextQ();
         }
