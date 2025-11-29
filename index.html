@@ -77,12 +77,14 @@
         </div>
 
         <!-- GAME MODES -->
-        <button class="mode-btn" onclick="startGame('standard')">
+        <!-- FIX: Changed onclick from startGame to Game.start -->
+        <button class="mode-btn" onclick="Game.start('standard')">
             START RUN
             <div style="font-size:0.8rem; opacity:0.8">Standard Mix</div>
         </button>
 
-        <button id="btnBossRush" class="mode-btn locked" onclick="startGame('boss')">
+        <!-- FIX: Changed onclick from startGame to Game.start -->
+        <button id="btnBossRush" class="mode-btn locked" onclick="Game.start('boss')">
             BOSS RUSH
             <div style="font-size:0.8rem; opacity:0.8">Only Bosses & Mini-Bosses</div>
             <div class="lock-icon">🔒</div>
@@ -116,7 +118,7 @@
 const Game = {
     pool: [], // All loaded questions
     activeDeck: [], // Filtered by settings
-    state: { hp:3, score:0, gold:0, mode:'standard' },
+    state: { hp:3, score:0, gold:0, mode:'standard', time:30 },
     settings: {}, // { "Subject_Topic": true/false }
     player: { gold:0, best:0, unlocks:[] },
     
@@ -154,7 +156,6 @@ const Game = {
     // Called by external files to register content
     addPack(pack) {
         // pack.questions is array of { subject, topic, type, gen/data }
-        // We flatten them into the main pool with unique IDs
         pack.questions.forEach(q => {
             q._origin = pack.name;
             this.pool.push(q);
@@ -226,20 +227,24 @@ const Game = {
     },
 
     nextQ() {
-        // Simple Loop for now
         if(this.state.hp <= 0) return this.gameOver();
         
-        // Pick random question from filtered deck
+        // Pick random question
         let template = this.activeDeck[Math.floor(Math.random() * this.activeDeck.length)];
         
         // GENERATE CONTENT
         let content = null;
-        if(template.gen) {
-            // Dynamic (Math)
-            content = template.gen(false); // isBoss?
-        } else {
-            // Static (History/Psych)
-            content = template.data;
+        try {
+            if(template.gen) {
+                // Dynamic (Math)
+                content = template.gen(false); 
+            } else {
+                // Static (History/Psych)
+                content = template.data;
+            }
+        } catch(e) {
+            console.error("Gen Error", e);
+            return this.nextQ(); // Retry if gen fails
         }
 
         this.renderQ(template.type, content);
@@ -258,20 +263,23 @@ const Game = {
         if(type === 'choice') {
             inp.innerHTML = `<div class="choice-grid"></div>`;
             let grid = inp.querySelector('.choice-grid');
-            // Get unique options logic here (simplified)
+            
             let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
             
             opts.forEach(opt => {
                 let btn = document.createElement('button');
                 btn.className = 'ans-btn';
-                btn.innerText = opt; // Need mathjax check here
+                // Check if math formatting needed
+                let txt = opt.toString();
+                if(txt.match(/[\^\\_=<>\/]/)) btn.innerHTML = `\\(${txt}\\)`;
+                else btn.innerText = txt;
+                
                 btn.onclick = () => this.check(opt == content.a);
                 grid.appendChild(btn);
             });
             if(window.MathJax) MathJax.typesetPromise([grid]);
         } 
         else if(type === 'match') {
-            // content.pairs = [{left:'A', right:'B'}, ...]
             inp.innerHTML = `<div class="match-grid"></div>`;
             let grid = inp.querySelector('.match-grid');
             let lefts = [], rights = [];
@@ -314,8 +322,6 @@ const Game = {
                 }
             };
 
-            // Render
-            // Simple interleaving for visual 2-col layout
             for(let i=0; i<lefts.length; i++) {
                 let l = document.createElement('div'); l.className='match-item'; l.innerText=lefts[i].txt;
                 l.onclick = ()=>checkPair('L', lefts[i], l);
@@ -327,8 +333,6 @@ const Game = {
             }
         }
         else if(type === 'blank') {
-            // "The _1_ is the powerhouse of the _2_"
-            // content.q has '___'
             let parts = content.q.split('___');
             let html = "";
             parts.forEach((p,i) => {
@@ -337,12 +341,11 @@ const Game = {
             });
             qText.innerHTML = html;
             
-            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5); // Simplified for single blank
+            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5);
             let div = document.createElement('div'); div.className = 'word-bank';
             bank.forEach(w => {
                 let b = document.createElement('div'); b.className='word-chip'; b.innerText=w;
                 b.onclick = () => {
-                    // Simple single blank logic
                     if(w == content.a) this.check(true);
                     else this.check(false);
                 };
@@ -359,8 +362,10 @@ const Game = {
         } else {
             this.state.hp--;
             document.getElementById('hudLives').innerText = "❤️".repeat(this.state.hp);
+            // Visual Damage
             document.body.style.background = "#500";
             setTimeout(()=>document.body.style.background="var(--bg)", 200);
+            
             if(this.state.hp<=0) this.gameOver();
             else this.nextQ();
         }
