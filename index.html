@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Knowledge Rogue: v12</title>
+    <title>Knowledge Rogue: Infinite</title>
+    
+    <!-- Load CSS -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Load MathJax -->
     <script>
     window.MathJax = {
       tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
@@ -15,37 +19,57 @@
 </head>
 <body>
 
-<!-- LOADER -->
-<div id="loader" class="screen center" style="z-index:5000; background:#000;">
-    <h2 style="color:var(--green)">SYSTEM LOADING</h2>
+<!-- 1. LOADING SCREEN -->
+<div id="loader" class="screen center" style="z-index: 5000; background: #000;">
+    <h2 style="color:var(--green)">INITIALIZING ENGINE</h2>
     <div class="loader-bar-box"><div class="loader-bar" id="loaderBar"></div></div>
-    <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Initializing...</div>
+    <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Loading System...</div>
 </div>
 
-<!-- SETUP SCREEN -->
-<div id="setupScreen" class="screen center hidden" style="z-index:2000; background:var(--bg);">
-    <h1>SELECT LIBRARY</h1>
-    <div class="setup-grid" id="setupGrid"></div>
+<!-- 2. FIRST RUN SETUP (Topic Selection) -->
+<div id="setupScreen" class="screen center hidden" style="z-index: 2000; background:var(--bg);">
+    <h1>SELECT CURRICULUM</h1>
+    <p style="color:#aaa; width:80%; text-align:center;">Tap topics to toggle. (Blue = Active)</p>
+    
+    <!-- Container for scrolling lists -->
+    <div class="setup-container">
+        <div id="setupGrid"></div>
+    </div>
+    
     <button class="big-btn" onclick="Game.finishSetup()">CONFIRM</button>
 </div>
 
-<!-- SETTINGS OVERLAY -->
-<div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index:2000; justify-content:center; align-items:center; display:flex; flex-direction: column;">
-    <h2 style="color:white;">MODULES</h2>
-    <div id="settingsArea" style="width:90%; max-width:400px;"></div>
-    <button class="big-btn" onclick="Game.closeSettings()">SAVE</button>
+<!-- 3. SETTINGS OVERLAY (Menu Context) -->
+<div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index: 2000;">
+    <h2 style="color:white;">ACTIVE TOPICS</h2>
+    <div id="settingsArea" style="width:90%; max-width:500px; max-height:60%; overflow-y:auto; margin-bottom:20px;"></div>
+    <button class="big-btn" onclick="Game.closeSettings()">SAVE & CLOSE</button>
 </div>
 
-<!-- MAIN MENU -->
-<div id="menuScreen" class="screen center hidden">
-    <div class="menu-header">
-        <div class="menu-stats">
-            <span>🏆 Best: <span id="menuBest">0</span></span>
-            <span class="gold-display">🪙 <span id="menuGold">0</span></span>
-        </div>
+<!-- 4. PAUSE OVERLAY (Game Context) -->
+<div id="pauseOverlay" class="screen center hidden" style="background:rgba(0,0,0,0.9); z-index: 3000;">
+    <h1 style="color:white;">PAUSED</h1>
+    <div style="display:flex; flex-direction:column; gap:15px; width: 200px;">
+        <button class="big-btn" style="background:var(--blue)" onclick="Game.resumeGame()">RESUME</button>
+        <button class="big-btn" style="background:#444" onclick="Game.openSettings()">SETTINGS</button>
+        <button class="big-btn" style="background:var(--red)" onclick="Game.quitRun()">ABORT RUN</button>
     </div>
-    
-    <div class="menu-content">
+</div>
+
+<!-- 5. MAIN MENU -->
+<div id="menuScreen" class="screen center hidden">
+    <div class="menu-container">
+        <!-- Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="text-align:left;">
+                <h1 style="margin:0; font-size:1.5rem;">KNOWLEDGE ROGUE</h1>
+                <div style="font-size:0.8rem; color:#777">Best: <span id="menuBest">0</span></div>
+            </div>
+            <div style="text-align:right;">
+                <div style="color:var(--gold); font-size:1.2rem; font-weight:bold;">🪙 <span id="menuGold">0</span></div>
+            </div>
+        </div>
+
         <!-- Avatar Preview -->
         <div class="avatar-box">
             <div class="base-part base-legs"></div>
@@ -58,7 +82,7 @@
             <div class="layer l-main" id="p-main"></div>
         </div>
 
-        <!-- Tabs -->
+        <!-- Nav -->
         <div class="shop-nav">
             <button class="nav-btn active" onclick="Game.switchTab('run')">PLAY</button>
             <button class="nav-btn" onclick="Game.switchTab('stats')">SKILLS</button>
@@ -66,66 +90,29 @@
             <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
         </div>
 
-        <!-- Tab: RUN -->
-        <div id="tabRun" class="shop-grid active" style="display:flex; flex-direction:column; justify-content:center; padding:10px;">
-            <button class="start-btn" onclick="Game.startRun()">START RUN</button>
-            <p style="color:#777; font-size:0.8rem; margin-top:15px;">Loaded: <span id="activeSubjectCount">0</span> Subjects</p>
-            <div class="gear-icon" onclick="Game.openSettings()" style="position:relative; margin: 20px auto; top:0; right:0;">⚙️</div>
+        <!-- Tab: Run -->
+        <div id="tabRun" class="shop-grid active" style="display:flex; flex-direction:column;">
+            <button class="mode-btn" onclick="Game.startRun()">START RUN</button>
+            <button class="mode-btn" onclick="Game.openSettings()" style="background:#444;">⚙️ CURRICULUM</button>
+            <div style="color:#777; font-size:0.8rem; margin-top:10px;">Loaded: <span id="activeSubjectCount">0</span> Topics</div>
         </div>
 
-        <!-- Tab: SHOPS -->
+        <!-- Tab: Shops -->
         <div id="shopStats" class="shop-grid hidden"></div>
         <div id="shopItems" class="shop-grid hidden"></div>
         <div id="shopGear" class="shop-grid hidden"></div>
     </div>
 </div>
 
-<!-- GAME SCREEN -->
+<!-- 6. GAME SCREEN -->
 <div id="gameScreen" class="screen hidden">
     <div id="gameHUD">
-        <div>
-            <div style="font-size:1.5rem;" id="hudLives">❤️❤️❤️</div>
-            <div style="color:var(--gold); font-weight:bold;" id="hudGold">0g</div>
-        </div>
-        <!-- Powerups -->
-        <div class="powerup-bar">
-            <div class="p-btn" id="btnFifty" onclick="Game.usePowerup('fifty')">✂️<div class="p-count" id="countfifty">0</div></div>
-            <div class="p-btn" id="btnFreeze" onclick="Game.usePowerup('freeze')">❄️<div class="p-count" id="countfreeze">0</div></div>
-            <div class="p-btn" id="btnSkip" onclick="Game.usePowerup('skip')">⏭️<div class="p-count" id="countskip">0</div></div>
-        </div>
         
-        <!-- In-Game Avatar -->
-        <div class="avatar-box" style="transform: scale(0.9); margin:0; margin-top:-10px;">
-             <div class="base-part base-legs"></div>
-             <div class="base-part base-torso"></div>
-             <div class="base-part base-head" id="g-face">😐</div>
-             <div class="layer l-feet" id="g-feet"></div>
-             <div class="layer l-body" id="g-body"></div>
-             <div class="layer l-head" id="g-head"></div>
-             <div class="layer l-off" id="g-off"></div>
-             <div class="layer l-main" id="g-main"></div>
-        </div>
-    </div>
-    
-    <div style="height:5px; background:#333;"><div id="timerBar" style="height:100%; width:100%; background:var(--green);"></div></div>
-    
-    <!-- Scratchpad -->
-    <canvas id="drawLayer"></canvas>
-    <div class="gear-icon" onclick="Game.toggleScratch()" style="top:70px; right:20px; z-index:60;">✏️</div>
-
-    <div id="qArea">
-        <div id="bossTag" style="display:none; color:var(--red); font-weight:bold; margin-bottom:5px;">⚠️ BOSS ⚠️</div>
-        <div id="chainStatus" style="display:none; font-size:0.8rem; color:var(--accent); font-weight:bold; margin-bottom:5px;">CHAIN 1/3</div>
-        <div id="preambleBox"></div>
-        <div id="qText"></div>
-    </div>
-
-    <div id="inputContainer"></div>
-</div>
-
-<!-- SCRIPTS -->
-<script src="engine.js"></script>
-<script src="content/math_exam_2025.js"></script>
-
-</body>
-</html>
+        <!-- HUD Left: Stats -->
+        <div style="flex:1;">
+            <div style="font-size:1.3rem;" id="hudLives">❤️❤️❤️</div>
+            <div style="color:var(--gold);">🪙 <span id="hudGold">0</span></div>
+            
+            <!-- Powerups -->
+            <div class="powerup-bar">
+                <div class=
