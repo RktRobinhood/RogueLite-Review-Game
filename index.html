@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Knowledge Rogue</title>
-    <!-- Load Styles -->
+    <title>Knowledge Rogue: Infinite</title>
+    
+    <!-- Load CSS -->
     <link rel="stylesheet" href="style.css">
+    
     <!-- Load MathJax -->
     <script>
     window.MathJax = {
@@ -17,31 +19,42 @@
 </head>
 <body>
 
-<!-- 1. LOADING SCREEN (This was missing!) -->
-<div id="loader" class="screen center" style="background:#000; z-index:2000;">
-    <h2 style="color:var(--green)">INITIALIZING...</h2>
+<!-- 1. LOADING SCREEN -->
+<div id="loader" class="screen center" style="z-index: 3000;">
+    <h2 style="color:var(--green)">INITIALIZING ENGINE</h2>
     <div class="loader-bar-box"><div class="loader-bar" id="loaderBar"></div></div>
     <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Loading System...</div>
 </div>
 
 <!-- 2. FIRST RUN SETUP -->
-<div id="setupScreen" class="screen center hidden" style="z-index:1500; background:var(--bg);">
+<div id="setupScreen" class="screen center hidden" style="z-index: 2000; background:var(--bg);">
     <h1>SELECT CURRICULUM</h1>
-    <p style="color:#aaa; width:80%; text-align:center;">Select the subjects you want to load.</p>
+    <p style="color:#aaa; width:80%; text-align:center;">Tap to toggle subjects. All selected by default.</p>
     <div class="setup-grid" id="setupGrid"></div>
     <button class="big-btn" onclick="Game.finishSetup()">CONFIRM</button>
 </div>
 
-<!-- 3. SETTINGS OVERLAY -->
-<div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index:1000;">
+<!-- 3. SETTINGS OVERLAY (Menu Context) -->
+<div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index: 2000;">
     <h2 style="color:white;">ACTIVE TOPICS</h2>
     <div id="settingsArea" style="width:90%; max-width:500px; max-height:60%; overflow-y:auto; margin-bottom:20px;"></div>
     <button class="big-btn" onclick="Game.closeSettings()">SAVE & CLOSE</button>
 </div>
 
-<!-- 4. MAIN MENU -->
+<!-- 4. PAUSE OVERLAY (Game Context) -->
+<div id="pauseOverlay" class="screen center hidden" style="background:rgba(0,0,0,0.85); z-index: 2000;">
+    <h1 style="color:white;">PAUSED</h1>
+    <div style="display:flex; flex-direction:column; gap:15px;">
+        <button class="big-btn" style="background:var(--blue)" onclick="Game.resumeGame()">RESUME</button>
+        <button class="big-btn" style="background:#444" onclick="Game.openSettings()">SETTINGS</button>
+        <button class="big-btn" style="background:var(--red)" onclick="Game.quitRun()">QUIT RUN</button>
+    </div>
+</div>
+
+<!-- 5. MAIN MENU -->
 <div id="menuScreen" class="screen center hidden">
     <div class="menu-container">
+        <!-- Header -->
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="text-align:left;">
                 <h1 style="margin:0; font-size:1.5rem;">KNOWLEDGE ROGUE</h1>
@@ -64,94 +77,7 @@
             <div class="layer l-main" id="p-main"></div>
         </div>
 
+        <!-- Nav -->
         <div class="shop-nav">
             <button class="nav-btn active" onclick="Game.switchTab('run')">PLAY</button>
-            <button class="nav-btn" onclick="Game.switchTab('stats')">SKILLS</button>
-            <button class="nav-btn" onclick="Game.switchTab('items')">ITEMS</button>
-            <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
-        </div>
-
-        <!-- RUN TAB -->
-        <div id="tabRun" class="shop-grid active" style="display:flex; flex-direction:column;">
-            <button class="mode-btn" onclick="Game.start('standard')">START RUN</button>
-            <button class="mode-btn" onclick="Game.openSettings()" style="background:#444;">⚙️ SETTINGS</button>
-            <div style="color:#777; font-size:0.8rem; margin-top:10px;">Loaded: <span id="activeSubjectCount">0</span> Subjects</div>
-        </div>
-
-        <div id="shopStats" class="shop-grid hidden"></div>
-        <div id="shopItems" class="shop-grid hidden"></div>
-        <div id="shopGear" class="shop-grid hidden"></div>
-    </div>
-</div>
-
-<!-- 5. GAME SCREEN -->
-<div id="gameScreen" class="screen hidden">
-    <div id="gameHUD">
-        <div style="flex:1;">
-            <div style="font-size:1.3rem;" id="hudLives">❤️❤️❤️</div>
-            <div style="color:var(--gold);">🪙 <span id="hudGold">0</span></div>
-            <!-- Powerups -->
-            <div class="powerup-bar">
-                <div class="p-btn" id="btnFifty" onclick="Game.usePowerup('fifty')">
-                    ✂️ <div class="p-count" id="countFifty">0</div>
-                </div>
-                <div class="p-btn" id="btnFreeze" onclick="Game.usePowerup('freeze')">
-                    ❄️ <div class="p-count" id="countFreeze">0</div>
-                </div>
-                <div class="p-btn" id="btnSkip" onclick="Game.usePowerup('skip')">
-                    ⏭️ <div class="p-count" id="countSkip">0</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Boss UI -->
-        <div id="bossContainer" style="display:none;">
-            <div id="bossTitle" style="color:var(--red); font-weight:bold;">BOSS</div>
-            <div id="bossHealth" style="font-size:1.5rem;">💜💜💜</div>
-        </div>
-
-        <!-- In-Game Avatar -->
-        <div class="avatar-box" style="transform: scale(0.9);">
-             <div class="base-part base-legs"></div>
-             <div class="base-part base-torso"></div>
-             <div class="base-part base-head" id="g-face">😐</div>
-             <div class="layer l-feet" id="g-feet"></div>
-             <div class="layer l-body" id="g-body"></div>
-             <div class="layer l-head" id="g-head"></div>
-             <div class="layer l-off" id="g-off"></div>
-             <div class="layer l-main" id="g-main"></div>
-        </div>
-    </div>
-
-    <div style="height:5px; background:#333;"><div id="timerBar" style="height:100%; width:100%; background:var(--green);"></div></div>
-
-    <div id="qArea">
-        <!-- Preamble / Context Box -->
-        <div id="preambleBox"></div>
-        <!-- Main Question -->
-        <div id="qText">...</div>
-    </div>
-
-    <div id="inputContainer"></div>
-</div>
-
-<!-- 6. GAME OVER -->
-<div id="gameOverScreen" class="screen center hidden" style="background:rgba(0,0,0,0.9);">
-    <h1 style="color:var(--red)">DEFEAT</h1>
-    <h2>Score: <span id="endScore">0</span></h2>
-    <h3 style="color:var(--gold); margin-top:0;">Gold Earned: <span id="endGold">0</span></h3>
-    
-    <div id="deathRecapBox" style="width:80%; padding:15px; border:1px solid var(--red); background:#221111; border-radius:8px;">
-        <div style="color:var(--red); font-size:0.8rem;">FATAL QUESTION:</div>
-        <div id="deathQ" style="margin:10px 0;"></div>
-        <div style="color:var(--green); font-size:0.8rem;">ANSWER:</div>
-        <div id="deathAns" style="font-weight:bold;"></div>
-    </div>
-    <button class="big-btn" onclick="location.reload()">RETURN</button>
-</div>
-
-<!-- LOAD SCRIPTS -->
-<script src="engine.js"></script>
-
-</body>
-</html>
+            <button cl

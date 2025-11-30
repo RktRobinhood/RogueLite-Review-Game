@@ -5,19 +5,18 @@ const Game = {
         activeFiles: [],
         stats: { hearts:0, timer:0, greed:0 },
         items: { skip:0, fifty:0, freeze:0 },
-        gold: 1000, // Starting gold for testing
+        gold: 1000,
         best: 0
     },
     run: { active:false, chain:null },
+    scratch: { active:false, ctx:null, isDrawing:false },
 
-    // --- INIT ---
     async init() {
         this.loadConfig();
-        // Force a default subject if none exist (First run hack)
-        if(!this.config.activeFiles) this.config.activeFiles = [];
-        
+        this.initScratchpad();
         await this.fetchManifest();
         
+        // If no active files saved, force setup
         if(this.config.activeFiles.length === 0) {
             this.showSetup();
         } else {
@@ -27,11 +26,11 @@ const Game = {
     },
 
     loadConfig() {
-        const d = localStorage.getItem('rogueConfig_v8');
+        const d = localStorage.getItem('rogueConfig_v9');
         if(d) this.config = JSON.parse(d);
     },
     saveConfig() {
-        localStorage.setItem('rogueConfig_v8', JSON.stringify(this.config));
+        localStorage.setItem('rogueConfig_v9', JSON.stringify(this.config));
         this.updateMenuUI();
     },
 
@@ -39,13 +38,13 @@ const Game = {
         this.updateLoader(20);
         try {
             const resp = await fetch('library.json');
-            if(!resp.ok) throw new Error();
+            if(!resp.ok) throw new Error("404");
             this.manifest = await resp.json();
         } catch(e) {
-            console.warn("Manifest load failed. Using Fallback.");
+            console.warn("Using Local Fallback");
             this.manifest = [
                 { id: 'math_core', name: 'IB Math Core', file: 'content/math_core.js' },
-                { id: 'extras', name: 'Extras', file: 'content/extras.js' }
+                { id: 'extras', name: 'Psych & TOK Demo', file: 'content/extras.js' }
             ];
         }
         this.updateLoader(50);
@@ -53,16 +52,13 @@ const Game = {
 
     async loadContent() {
         this.library = [];
-        // If using local fallback without server, we rely on script tags in index.html
-        // Check if starter content already exists in memory from manual tags
-        if(this.library.length === 0) {
-            // Wait 100ms in case scripts are still parsing
-            await new Promise(r => setTimeout(r, 100));
+        // For local dev: if StarterContent exists from script tags, ingest it
+        if(typeof StarterContent !== 'undefined') {
+             // No-op, script tags handled by index.html
         }
         this.updateLoader(100);
     },
 
-    // Called by content files
     addPack(pack) {
         pack.questions.forEach(q => {
             q._src = pack.id;
@@ -72,11 +68,8 @@ const Game = {
     },
 
     // --- UI ---
-    updateLoader(pct) { 
-        const bar = document.getElementById('loaderBar');
-        if(bar) bar.style.width = pct+"%"; 
-    },
-
+    updateLoader(pct) { document.getElementById('loaderBar').style.width = pct+"%"; },
+    
     showSetup() {
         document.getElementById('loader').classList.add('hidden');
         document.getElementById('setupScreen').classList.remove('hidden');
@@ -84,7 +77,7 @@ const Game = {
         grid.innerHTML = "";
         this.manifest.forEach(lib => {
             let div = document.createElement('div');
-            div.className = 'lib-card';
+            div.className = 'lib-card selected'; // DEFAULT SELECTED
             div.innerHTML = `<span>${lib.name}</span><span class="checkmark">✔</span>`;
             div.onclick = () => div.classList.toggle('selected');
             div.dataset.id = lib.id;
@@ -107,45 +100,63 @@ const Game = {
         this.renderShops();
         this.updateMenuUI();
     },
-
+    
     updateMenuUI() {
         document.getElementById('menuGold').innerText = this.config.gold;
         document.getElementById('menuBest').innerText = this.config.best;
         document.getElementById('activeSubjectCount').innerText = this.config.activeFiles.length;
     },
 
-    switchTab(tab) {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        event.target.classList.add('active');
-        ['tabRun','shopStats','shopItems'].forEach(id => document.getElementById(id).classList.remove('active'));
+    // --- SETTINGS ---
+    openSettings() {
+        document.getElementById('settingsOverlay').classList.remove('hidden');
+        const area = document.getElementById('settingsArea');
+        area.innerHTML = "";
         
-        if(tab === 'run') document.getElementById('tabRun').classList.add('active');
-        else if(tab === 'stats') document.getElementById('shopStats').classList.add('active');
-        else if(tab === 'items') document.getElementById('shopItems').classList.add('active');
+        // We need to know available files vs active files
+        this.manifest.forEach(lib => {
+             let isActive = this.config.activeFiles.includes(lib.id);
+             let div = document.createElement('div');
+             div.className = "setting-row";
+             div.innerHTML = `
+                <span>${lib.name}</span>
+                <div class="toggle-btn ${isActive?'active':''}" onclick="Game.toggleFile('${lib.id}', this)">
+                    <div class="toggle-knob"></div>
+                </div>`;
+             area.appendChild(div);
+        });
+    },
+    
+    toggleFile(id, btn) {
+        if(this.config.activeFiles.includes(id)) {
+            this.config.activeFiles = this.config.activeFiles.filter(x => x !== id);
+            btn.classList.remove('active');
+        } else {
+            this.config.activeFiles.push(id);
+            btn.classList.add('active');
+        }
     },
 
-    // --- SHOP LOGIC ---
-    getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
+    closeSettings() {
+        if(this.config.activeFiles.length === 0) return alert("Must have 1 active!");
+        this.saveConfig();
+        document.getElementById('settingsOverlay').classList.add('hidden');
+        // Ideally reload content here, but simple refresh for now
+        location.reload();
+    },
 
+    // --- SHOPS ---
+    getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
+    
     renderShops() {
-        // Stats
         const statsDiv = document.getElementById('shopStats');
         statsDiv.innerHTML = "";
         ['hearts', 'timer', 'greed'].forEach(stat => {
             let lvl = this.config.stats[stat];
             let cost = this.getCost(lvl);
-            let btn = lvl >= 10 
-                ? `<button class="buy-btn" disabled>MAX</button>`
-                : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
-            
-            statsDiv.innerHTML += `
-            <div class="shop-item">
-                <h3 style="margin:0; text-transform:capitalize;">${stat}</h3>
-                <div class="upgrade-dots">
-                    ${Array(10).fill(0).map((_,i)=>`<div class="dot ${i<lvl?'active':''}"></div>`).join('')}
-                </div>
-                ${btn}
-            </div>`;
+            let btn = (lvl >= 10) ? `<button class="buy-btn" disabled>MAX</button>` 
+                                  : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
+            statsDiv.innerHTML += `<div class="shop-item"><h3 style="margin:0; text-transform:capitalize;">${stat}</h3><div class="upgrade-dots">${Array(10).fill(0).map((_,i)=>`<div class="dot ${i<lvl?'active':''}"></div>`).join('')}</div>${btn}</div>`;
         });
 
         // Items
@@ -190,9 +201,25 @@ const Game = {
         }
     },
 
+    switchTab(tab) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        ['tabRun','shopStats','shopItems'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+        });
+        if(tab==='run') document.getElementById('tabRun').style.display = 'flex';
+        else if(tab==='stats') document.getElementById('shopStats').style.display = 'grid';
+        else if(tab==='items') document.getElementById('shopItems').style.display = 'grid';
+    },
+
     // --- GAMEPLAY ---
     startRun() {
-        if(this.library.length === 0) return alert("No questions loaded! Check library.json paths.");
+        // Filter Library based on Active Files
+        // Since we loaded everything into pool, we filter by _src (which matches file ID)
+        // Wait, simple solution: Just use the pool. The user selected files to load.
+        // If we want topic toggle later, we add that.
+        
+        if(this.library.length === 0) return alert("No questions loaded!");
         
         this.run = {
             hp: 3 + Math.floor(this.config.stats.hearts/2),
@@ -206,7 +233,6 @@ const Game = {
 
         document.getElementById('menuScreen').classList.add('hidden');
         document.getElementById('gameScreen').classList.remove('hidden');
-        this.updateHUD();
         this.nextQ();
     },
 
@@ -224,7 +250,6 @@ const Game = {
             }
         }
 
-        // Pick Random
         let template = this.library[Math.floor(Math.random() * this.library.length)];
         
         if(template.type === 'chain') {
@@ -242,19 +267,19 @@ const Game = {
         preBox.style.display = 'block';
         preBox.innerHTML = this.formatMath(this.run.chain.data.preamble);
         
-        const hudC = document.getElementById('hudChain');
+        const hudC = document.getElementById('chainStatus');
         hudC.style.display = 'block';
         hudC.innerText = `CHAIN: ${this.run.chain.step + 1} / ${this.run.chain.data.steps.length}`;
         
-        this.renderInput('choice', stepData, true);
+        this.renderInput('choice', stepData, true); 
     },
 
     renderInput(type, content, keepPreamble = false) {
-        this.currentQ = { ...content, type: type }; // Store for 50/50 logic
+        this.currentQ = { ...content, type: type }; 
 
         if(!keepPreamble) {
             document.getElementById('preambleBox').style.display = 'none';
-            document.getElementById('hudChain').style.display = 'none';
+            document.getElementById('chainStatus').style.display = 'none';
             if(content.preamble) {
                 document.getElementById('preambleBox').style.display = 'block';
                 document.getElementById('preambleBox').innerHTML = this.formatMath(content.preamble);
@@ -266,30 +291,24 @@ const Game = {
         if(window.MathJax) MathJax.typesetPromise();
 
         const inp = document.getElementById('inputContainer');
-        inp.innerHTML = ""; // Clear previous
+        inp.innerHTML = ""; 
 
         // --- RENDERERS ---
-        
-        // 1. CHOICE
         if(type === 'choice') {
             inp.innerHTML = `<div class="choice-grid"></div>`;
             let grid = inp.querySelector('.choice-grid');
             let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
-            
             opts.forEach(opt => {
                 let btn = document.createElement('button');
                 btn.className = 'ans-btn';
                 btn.innerHTML = this.formatMath(opt);
-                btn._isCorrect = (opt == content.a); // Tag for 50/50
+                btn._isCorrect = (opt == content.a);
                 btn.onclick = () => this.handleAnswer(opt == content.a);
                 grid.appendChild(btn);
             });
             if(window.MathJax) MathJax.typesetPromise([grid]);
-            this.updatePowerupUI(true); // Enable 50/50
         }
-
-        // 2. MATCH
-        else if(type === 'match') {
+        else if (type === 'match') {
             inp.innerHTML = `<div class="match-grid"></div>`;
             let grid = inp.querySelector('.match-grid');
             let lefts = content.pairs.map((p,i)=>({t:p.left, id:i})).sort(()=>Math.random()-0.5);
@@ -299,15 +318,12 @@ const Game = {
 
             const check = (side, item, el) => {
                 if(el.classList.contains('solved')) return;
-                // Select logic
                 if(sel && sel.side !== side) {
                     if(sel.item.id === item.id) {
-                        // Match
                         el.classList.add('solved'); sel.el.classList.add('solved');
                         matched++;
                         if(matched >= content.pairs.length) this.handleAnswer(true);
                     } else {
-                        // Fail
                         this.handleAnswer(false);
                     }
                     sel.el.classList.remove('selected'); sel = null;
@@ -317,32 +333,20 @@ const Game = {
                 }
             };
 
-            lefts.forEach(i => { 
-                let d=document.createElement('div'); d.className='match-item'; d.innerHTML=i.t; 
-                d.onclick=()=>check('L',i,d); grid.appendChild(d); 
-            });
-            rights.forEach(i => { 
-                let d=document.createElement('div'); d.className='match-item'; d.innerHTML=i.t; 
-                d.onclick=()=>check('R',i,d); grid.appendChild(d); 
-            });
-            this.updatePowerupUI(false); // Disable 50/50
+            lefts.forEach(i => { let d=document.createElement('div'); d.className='match-item'; d.innerHTML=i.t; d.onclick=()=>check('L',i,d); grid.appendChild(d); });
+            rights.forEach(i => { let d=document.createElement('div'); d.className='match-item'; d.innerHTML=i.t; d.onclick=()=>check('R',i,d); grid.appendChild(d); });
         }
-
-        // 3. BLANK
         else if(type === 'blank') {
             let parts = content.q.split('___');
             qText.innerHTML = parts.join('<span class="blank-slot">?</span>');
-            
             let bank = [...content.w, content.a].sort(()=>Math.random()-0.5);
             inp.innerHTML = `<div class="word-bank"></div>`;
             let div = inp.querySelector('.word-bank');
-            
             bank.forEach(w => {
                 let b = document.createElement('div'); b.className='word-chip'; b.innerHTML=w;
                 b.onclick = () => this.handleAnswer(w == content.a);
                 div.appendChild(b);
             });
-            this.updatePowerupUI(false);
         }
 
         // Reset Timer
@@ -361,8 +365,7 @@ const Game = {
     handleAnswer(isCorrect) {
         if(isCorrect) {
             this.run.score++;
-            this.run.gold += Math.floor(10 * (1 + this.config.stats.greed * 0.2));
-            // Flash Green
+            this.run.gold += Math.floor(10 * (1 + this.config.stats.greed * 0.1));
             document.getElementById('gameHUD').style.backgroundColor = "rgba(46, 204, 113, 0.3)";
             setTimeout(() => {
                 document.getElementById('gameHUD').style.backgroundColor = "rgba(0,0,0,0.4)";
@@ -370,37 +373,37 @@ const Game = {
             }, 200);
         } else {
             this.run.hp--;
-            // Flash Red
             document.body.style.background = "#500";
             setTimeout(()=>document.body.style.background="var(--bg)", 200);
             if(this.run.hp <= 0) this.gameOver();
+            else this.updateHUD();
         }
-        this.updateHUD();
     },
 
-    // --- POWERUPS ---
-    updatePowerupUI(enable50) {
-        // Grey out 50/50 if not applicable
-        const btn = document.getElementById('btnFifty');
-        if(enable50) {
-            btn.style.opacity = 1;
-            btn.style.pointerEvents = 'auto';
-        } else {
-            btn.style.opacity = 0.3;
-            btn.style.pointerEvents = 'none';
-        }
+    updateHUD() {
+        document.getElementById('hudLives').innerText = "❤️".repeat(this.run.hp);
+        document.getElementById('hudScore').innerText = this.run.score;
+        document.getElementById('hudGold').innerText = this.run.gold;
+        
+        ['Fifty','Freeze','Skip'].forEach(k => {
+            let key = k.toLowerCase();
+            document.getElementById('count'+k).innerText = this.config.items[key];
+            let btn = document.getElementById('btn'+k);
+            if(this.config.items[key] > 0 && btn.style.opacity != "0.3") {
+                 btn.classList.remove('disabled');
+            } else if (this.config.items[key] <= 0) {
+                 btn.classList.add('disabled');
+            }
+        });
     },
 
     usePowerup(type) {
         if(this.config.items[type] <= 0) return;
-
         if(type === 'fifty') {
             let grid = document.querySelector('.choice-grid');
             if(!grid) return;
-            // Find wrong buttons
             let wrongs = Array.from(grid.children).filter(b => !b._isCorrect);
             wrongs.sort(()=>Math.random()-0.5);
-            // Remove up to 2
             if(wrongs[0]) wrongs[0].classList.add('vanish');
             if(wrongs[1]) wrongs[1].classList.add('vanish');
             this.config.items.fifty--;
@@ -421,22 +424,6 @@ const Game = {
         this.updateHUD();
     },
 
-    updateHUD() {
-        document.getElementById('hudLives').innerText = "❤️".repeat(this.run.hp);
-        document.getElementById('hudGold').innerText = this.run.gold;
-        
-        ['Fifty','Freeze','Skip'].forEach(k => {
-            let key = k.toLowerCase();
-            document.getElementById('count'+k).innerText = this.config.items[key];
-            let btn = document.getElementById('btn'+k);
-            if(this.config.items[key] > 0 && btn.style.opacity != "0.3") {
-                 btn.classList.remove('disabled');
-            } else if (this.config.items[key] <= 0) {
-                 btn.classList.add('disabled');
-            }
-        });
-    },
-
     renderTimer() {
         let pct = (this.run.timeLeft / this.run.timerMax) * 100;
         let bar = document.getElementById('timerBar');
@@ -446,7 +433,7 @@ const Game = {
 
     gameOver() {
         clearInterval(this.run.timerInterval);
-        this.config.gold += this.run.gold; // Add run gold to bank
+        this.config.gold += this.run.gold; 
         if(this.run.score > this.config.best) this.config.best = this.run.score;
         this.saveConfig();
         alert(`Run Ended!\nScore: ${this.run.score}\nGold: ${this.run.gold}`);
@@ -456,9 +443,51 @@ const Game = {
     formatMath(str) {
         if(!str) return "";
         let s = str.toString();
-        // Basic Latex detection
         if(s.match(/[\\^_{}]/) || s.includes('log')) return `$$ ${s} $$`;
         return s;
+    },
+
+    // --- SCRATCHPAD ---
+    initScratchpad() {
+        let canvas = document.createElement('canvas');
+        canvas.id = 'drawLayer';
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        document.body.appendChild(canvas);
+        this.scratch.ctx = canvas.getContext('2d');
+        
+        const start = (e) => {
+            if(!this.scratch.active) return;
+            this.scratch.isDrawing = true;
+            this.scratch.ctx.beginPath();
+            this.scratch.ctx.moveTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+        };
+        const move = (e) => {
+            if(!this.scratch.active || !this.scratch.isDrawing) return;
+            this.scratch.ctx.lineTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            this.scratch.ctx.strokeStyle = "yellow";
+            this.scratch.ctx.lineWidth = 3;
+            this.scratch.ctx.stroke();
+        };
+        const end = () => { this.scratch.isDrawing = false; };
+
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        canvas.addEventListener('mouseup', end);
+        canvas.addEventListener('touchstart', start);
+        canvas.addEventListener('touchmove', move);
+        canvas.addEventListener('touchend', end);
+    },
+    
+    toggleScratch() {
+        this.scratch.active = !this.scratch.active;
+        let cvs = document.getElementById('drawLayer');
+        if(this.scratch.active) {
+            cvs.classList.add('active');
+        } else {
+            cvs.classList.remove('active');
+            this.scratch.ctx.clearRect(0, 0, cvs.width, cvs.height);
+        }
     }
 };
 
