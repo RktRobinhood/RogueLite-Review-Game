@@ -5,7 +5,7 @@ Game.addPack({
         // --- TOPIC 1: ALGEBRA ---
         {
             type: "choice", subject: "Math AA", topic: "Algebra",
-            gen: () => {
+            gen: (h) => {
                 let u1 = Math.floor(Math.random()*10)+2;
                 let d = Math.floor(Math.random()*5)+2;
                 return { 
@@ -17,14 +17,17 @@ Game.addPack({
         },
         {
             type: "choice", subject: "Math AA", topic: "Algebra",
-            gen: () => {
+            gen: (h) => {
                 let n = Math.floor(Math.random()*3)+3; 
                 // Binomial coeff of x^2 in (x+2)^n
-                let ans = (n*(n-1)/2) * 4;
+                // nC2 * 2^(n-2)
+                let nC2 = (n*(n-1))/2;
+                let pow2 = Math.pow(2, n-2);
+                let ans = nC2 * pow2;
                 return {
-                    q: `Find the coeff of $x^{${n-2}}$ in $(x+2)^${n}$.`,
+                    q: `Find the coeff of $x^2$ in $(x+2)^${n}$.`,
                     a: ans,
-                    w: [ans*2, ans/2, ans+4]
+                    w: [ans*2, ans/2, nC2]
                 };
             }
         },
@@ -32,13 +35,13 @@ Game.addPack({
         // --- TOPIC 2: FUNCTIONS ---
         {
             type: "choice", subject: "Math AA", topic: "Functions",
-            gen: () => {
-                let h = Math.floor(Math.random()*5)+1;
+            gen: (h) => {
+                let hVal = Math.floor(Math.random()*5)+1;
                 let k = Math.floor(Math.random()*5)+1;
                 return {
-                    q: `Find the vertex of $y = 2(x-${h})^2 + ${k}$.`,
-                    a: `(${h}, ${k})`,
-                    w: [`(-${h}, ${k})`, `(${k}, ${h})`, `(${h}, -${k})`]
+                    q: `Find the vertex of $y = 2(x-${hVal})^2 + ${k}$.`,
+                    a: `(${hVal}, ${k})`,
+                    w: [`(-${hVal}, ${k})`, `(${k}, ${hVal})`, `(${hVal}, -${k})`]
                 };
             }
         },
@@ -46,12 +49,22 @@ Game.addPack({
         // --- TOPIC 5: CALCULUS ---
         {
             type: "choice", subject: "Math AA", topic: "Calculus",
-            gen: () => {
+            gen: (h) => {
                 let p = Math.floor(Math.random()*3)+2;
                 return {
                     q: `$\\frac{d}{dx} \\ln(x^${p})$`,
                     a: `$\\frac{${p}}{x}$`,
                     w: [`$\\frac{1}{x^${p}}$`, `$x^${p-1}$`, `$\\frac{1}{${p}x}$`]
+                };
+            }
+        },
+        {
+            type: "choice", subject: "Math AA", topic: "Calculus",
+            gen: (h) => {
+                return {
+                    q: `Find $\\int \\cos x \\, dx$.`,
+                    a: `$\\sin x + C$`,
+                    w: [`$-\\sin x + C$`, `$\\cos x + C$`, `$-\\cos x + C$`]
                 };
             }
         },
@@ -64,9 +77,9 @@ Game.addPack({
             data: {
                 preamble: "A particle moves with velocity $v(t) = 3t^2 - 2t$ m/s.",
                 steps: [
-                    { q: "Find the initial acceleration.", a: "-2", w: ["0", "3", "-1"] },
-                    { q: "Find the velocity at $t=2$.", a: "8", w: ["6", "10", "4"] },
-                    { q: "Find the displacement at $t=1$, given $s(0)=0$.", a: "0", w: ["1", "2", "0.5"] } // s = t^3 - t^2
+                    { q: "Find the acceleration function $a(t)$.", a: "$6t - 2$", w: ["$t^3 - t^2$", "$3t - 2$", "$6t$"] },
+                    { q: "Find the initial velocity ($t=0$).", a: 0, w: [-2, 3, 1] },
+                    { q: "Find the displacement at $t=1$, given $s(0)=0$.", a: "0", w: ["1", "2", "0.5"] } 
                 ]
             }
         },
