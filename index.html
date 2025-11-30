@@ -3,36 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Knowledge Rogue: v20</title>
+    <title>Knowledge Rogue: v21</title>
     <link rel="stylesheet" href="style.css">
-    <script>
-    window.MathJax = {
-      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
-      svg: { fontCache: 'global' }
-    };
-    </script>
+    <!-- Load MathJax -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
 
 <!-- LOADER -->
 <div id="loader" class="screen center" style="z-index:5000; background:#000;">
-    <h2 style="color:var(--green)">LOADING</h2>
+    <h2 style="color:var(--green)">SYSTEM LOADING</h2>
     <div class="loader-bar-box"><div class="loader-bar" id="loaderBar"></div></div>
-    <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">System Init...</div>
+    <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Initializing...</div>
 </div>
 
 <!-- SETUP -->
 <div id="setupScreen" class="screen center hidden" style="z-index:2000; background:var(--bg);">
-    <h1>SELECT SUBJECTS</h1>
-    <div class="setup-container"><div id="setupGrid"></div></div>
+    <h1>SELECT LIBRARY</h1>
+    <div class="setup-container"><div class="setup-grid" id="setupGrid"></div></div>
     <button class="big-btn" onclick="Game.finishSetup()">START</button>
 </div>
 
 <!-- SETTINGS -->
 <div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index:2000;">
-    <h2 style="color:white;">MODULES</h2>
-    <div id="settingsArea" style="width:90%; max-width:500px; margin-bottom:20px;"></div>
+    <h2 style="color:white; margin-top: 50px;">MODULES</h2>
+    <div id="settingsArea" style="width:90%; max-width:500px; margin-bottom:20px; overflow-y: auto; max-height: 60%;"></div>
     <button class="big-btn" onclick="Game.closeSettings()">SAVE</button>
 </div>
 
@@ -40,15 +36,18 @@
 <div id="menuScreen" class="screen center hidden">
     <div class="menu-container">
         <div class="menu-header">
-            <div class="menu-stats">
-                <span>🏆 Best: <span id="menuBest">0</span></span>
-                <span class="gold-display">🪙 <span id="menuGold">0</span></span>
+            <div style="text-align:left;">
+                <h1 style="margin:0; font-size:1.2rem;">KNOWLEDGE ROGUE</h1>
+                <div style="font-size:0.8rem; color:#777">Best: <span id="menuBest">0</span></div>
+            </div>
+            <div style="text-align:right;">
+                <div style="color:var(--gold); font-size:1.2rem; font-weight:bold;">🪙 <span id="menuGold">0</span></div>
             </div>
         </div>
         
         <div class="menu-content">
-            <!-- Avatar -->
-            <div class="avatar-box">
+            <!-- Avatar (Background) -->
+            <div class="avatar-bg">
                 <div class="base-part base-legs"></div>
                 <div class="base-part base-torso"></div>
                 <div class="base-part base-head" id="p-face">😐</div>
@@ -59,19 +58,24 @@
                 <div class="layer l-main" id="p-main"></div>
             </div>
 
-            <div class="shop-nav">
-                <button class="nav-btn active" onclick="Game.switchTab('stats')">SKILLS</button>
-                <button class="nav-btn" onclick="Game.switchTab('items')">ITEMS</button>
-                <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
+            <!-- Shop UI (Foreground) -->
+            <div class="shop-ui-layer">
+                <div class="shop-nav">
+                    <button class="nav-btn active" onclick="Game.switchTab('stats')">SKILLS</button>
+                    <button class="nav-btn" onclick="Game.switchTab('items')">ITEMS</button>
+                    <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
+                </div>
+
+                <div class="shop-container">
+                    <div id="shopStats" class="shop-grid active"></div>
+                    <div id="shopItems" class="shop-grid hidden"></div>
+                    <div id="shopGear" class="shop-grid hidden"></div>
+                    <!-- Spacer for play button -->
+                    <div style="height: 80px;"></div>
+                </div>
             </div>
 
-            <div class="shop-container">
-                <div id="shopStats" class="shop-grid active"></div>
-                <div id="shopItems" class="shop-grid hidden"></div>
-                <div id="shopGear" class="shop-grid hidden"></div>
-            </div>
-            
-            <!-- Sticky Play Button -->
+            <!-- Sticky Play -->
             <div class="play-bar">
                  <button class="start-btn" onclick="Game.startRun()">START RUN</button>
             </div>
@@ -87,7 +91,6 @@
         <div style="flex:1;">
             <div style="font-size:1.5rem;" id="hudLives">❤️❤️❤️</div>
             <div style="color:var(--gold);">🪙 <span id="hudGold">0</span></div>
-            
             <div class="powerup-bar">
                 <div class="p-btn" id="btnFifty" onclick="Game.usePowerup('fifty')">✂️<div class="p-count" id="countfifty">0</div></div>
                 <div class="p-btn" id="btnFreeze" onclick="Game.usePowerup('freeze')">❄️<div class="p-count" id="countfreeze">0</div></div>
@@ -100,7 +103,8 @@
             <div id="bossHealth" style="font-size:1.5rem;">💜💜💜</div>
         </div>
 
-        <div class="avatar-box" style="transform: scale(0.9); margin:0; margin-right:10px;">
+        <!-- Small Game Avatar -->
+        <div class="avatar-box" style="transform: scale(0.6); margin:0; position: absolute; top: 5px; right: 10px;">
              <div class="base-part base-legs"></div>
              <div class="base-part base-torso"></div>
              <div class="base-part base-head" id="g-face">😐</div>

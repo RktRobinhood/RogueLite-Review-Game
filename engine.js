@@ -1,6 +1,7 @@
 const Game = {
+    // --- STATE ---
     manifest: [],
-    library: [],
+    library: [], 
     config: {
         activeFiles: [],
         stats: { hearts:0, timer:0, greed:0 },
@@ -11,23 +12,39 @@ const Game = {
     player: { face:null, gear:{head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] },
     run: { active:false, chain:null },
     scratch: { active:false, ctx:null, isDrawing:false },
-
+    
+    // --- INIT ---
     async init() {
-        console.log("Engine v20 Boot...");
+        console.log("Engine: Booting v21...");
         this.loadConfig();
+        
+        // Default Face
         if(!this.player.face) this.player.face = "😐";
+        
         this.initScratchpad();
-
+        
+        // 1. Load Manifest
         await this.fetchManifest();
-        await this.loadContent();
 
-        // Fallback if empty
+        // 2. Check Content (Loaded via script tags in index.html)
+        // Wait a tick for scripts to register
+        await new Promise(r => setTimeout(r, 200));
+
         if(this.library.length === 0) {
-             console.warn("Library empty. Is content/math_core.js loaded?");
+            console.warn("Engine: Library empty. Injecting Emergency Backup.");
+            this.injectEmergencyQuestions();
+        } else {
+            console.log(`Engine: Content Ready. ${this.library.length} templates loaded.`);
         }
 
-        document.getElementById('loader').style.display = 'none';
+        // 3. Hide Loader
+        const loader = document.getElementById('loader');
+        if(loader) {
+            loader.style.opacity = 0;
+            setTimeout(() => { loader.style.display = 'none'; }, 500);
+        }
 
+        // 4. Navigation
         if(!this.config.activeFiles || this.config.activeFiles.length === 0) {
             this.showSetup();
         } else {
@@ -35,28 +52,30 @@ const Game = {
         }
     },
 
+    // Content Registration
     addPack(pack) {
         if(!pack.questions) return;
         pack.questions.forEach(q => {
-            q._src = pack.id;
+            q._src = pack.id; 
             q._uid = pack.id + "_" + Math.random().toString(36).substr(2,9);
             this.library.push(q);
         });
-        console.log(`Registered: ${pack.name}`);
+        console.log(`Engine: Registered ${pack.name} (${pack.questions.length} Qs)`);
     },
 
+    // --- DATA & SAVES ---
     loadConfig() {
         try {
-            const d = localStorage.getItem('rogueConfig_v20');
+            const d = localStorage.getItem('rogueConfig_v21');
             if(d) {
                 const data = JSON.parse(d);
                 this.config = data.config || this.config;
                 this.player = data.player || this.player;
             }
-        } catch(e) {}
+        } catch(e) { console.error("Save corrupt", e); }
     },
     saveConfig() {
-        localStorage.setItem('rogueConfig_v20', JSON.stringify({
+        localStorage.setItem('rogueConfig_v21', JSON.stringify({
             config: this.config,
             player: this.player
         }));
@@ -70,41 +89,69 @@ const Game = {
             if(resp.ok) this.manifest = await resp.json();
             else throw new Error("404");
         } catch(e) {
-            console.log("Local Mode. Using manual manifest.");
-            this.manifest = [{ id: 'math_core', name: 'IB Math Core' }];
+            console.log("Engine: Local mode. Using fallback manifest.");
+            this.manifest = [
+                { id: 'math_aa_sl_may25', name: 'IB Math AA: May 2025' },
+                { id: 'math_core', name: 'IB Math Core' }
+            ];
         }
         this.updateLoader(60);
     },
 
-    async loadContent() {
-        // Wait for script tags
-        await new Promise(r => setTimeout(r, 200));
-        this.updateLoader(100);
+    injectEmergencyQuestions() {
+        this.addPack({
+            id: 'emergency',
+            name: 'Backup Protocol',
+            questions: [
+                { type:'choice', subject:'System', topic:'Backup', gen:()=>({q:'2+2?', a:'4', w:['3','5','22']}) }
+            ]
+        });
+        this.config.activeFiles = ['emergency'];
     },
 
-    // --- UI ---
+    // --- HELPERS ---
     updateLoader(pct) { 
         const bar = document.getElementById('loaderBar');
         if(bar) bar.style.width = pct+"%"; 
     },
+    safeClassRemove(id, cls) { const el = document.getElementById(id); if(el) el.classList.remove(cls); },
+    safeClassAdd(id, cls) { const el = document.getElementById(id); if(el) el.classList.add(cls); },
+    safeText(id, txt) { const el = document.getElementById(id); if(el) el.innerText = txt; },
     
+    formatMath(str) {
+        if(!str) return "";
+        let s = str.toString();
+        // Basic Latex detection: if it has backslashes or carets, wrap in $$
+        if(s.match(/[\\^_{}]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) {
+            // Avoid double wrapping if already wrapped
+            if(!s.trim().startsWith('$$')) return `$$ ${s} $$`;
+        }
+        return s;
+    },
+
+    // --- MENU & SETUP ---
     showSetup() {
-        document.getElementById('menuScreen').classList.add('hidden');
-        document.getElementById('setupScreen').classList.remove('hidden');
+        this.safeClassAdd('menuScreen', 'hidden');
+        this.safeClassRemove('setupScreen', 'hidden');
         const grid = document.getElementById('setupGrid');
         if(!grid) return;
         grid.innerHTML = "";
         
-        // Dedupe available IDs
-        const availableIDs = [...new Set(this.library.map(q => q._src))];
-        
-        availableIDs.forEach(id => {
-            let meta = this.manifest.find(m => m.id === id) || { name: id.toUpperCase(), id: id };
+        // Get unique sources
+        let sources = this.manifest.length > 0 
+            ? this.manifest 
+            : [...new Set(this.library.map(q => q._src))].map(s => ({id:s, name:s.toUpperCase()}));
+
+        sources.forEach(lib => {
             let div = document.createElement('div');
-            div.className = 'lib-card selected';
-            div.innerHTML = `<span>${meta.name}</span><span class="checkmark">✔</span>`;
-            div.onclick = () => div.classList.toggle('selected');
-            div.dataset.id = meta.id;
+            div.className = 'lib-card selected'; // Default selected
+            div.innerHTML = `<span>${lib.name}</span><span class="checkmark">✔</span>`;
+            div.onclick = () => {
+                div.classList.toggle('selected');
+                const check = div.querySelector('.checkmark');
+                if(check) check.style.display = div.classList.contains('selected') ? 'block' : 'none';
+            };
+            div.dataset.id = lib.id;
             grid.appendChild(div);
         });
     },
@@ -114,30 +161,30 @@ const Game = {
         if(selected.length === 0) return alert("Select at least one!");
         this.config.activeFiles = Array.from(selected).map(el => el.dataset.id);
         this.saveConfig();
-        document.getElementById('setupScreen').classList.add('hidden');
+        this.safeClassAdd('setupScreen', 'hidden');
         this.showMenu();
     },
 
     showMenu() {
-        document.getElementById('menuScreen').classList.remove('hidden');
+        this.safeClassRemove('menuScreen', 'hidden');
         this.updateMenuUI();
-        this.renderShops();
-        this.switchTab('stats'); // Default to Skills
+        // Default to stats tab so something is visible
+        this.switchTab('stats');
     },
 
     updateMenuUI() {
-        document.getElementById('menuGold').innerText = this.config.gold;
-        document.getElementById('menuBest').innerText = this.config.best;
+        this.safeText('menuGold', this.config.gold);
+        this.safeText('menuBest', this.config.best);
+        if(this.config.activeFiles) this.safeText('activeSubjectCount', this.config.activeFiles.length);
         this.renderAvatar('p');
     },
 
     renderAvatar(prefix) {
-        document.getElementById(prefix+'-face').innerText = this.player.face;
+        this.safeText(prefix+'-face', this.player.face);
         const slots = ['head','body','main','off','feet'];
         slots.forEach(s => {
             let g = gearConfig.find(x => x.id === this.player.gear[s]);
-            let el = document.getElementById(`${prefix}-${s}`);
-            if(el) el.innerText = g ? g.icon : "";
+            this.safeText(`${prefix}-${s}`, g ? g.icon : "");
         });
     },
 
@@ -145,6 +192,7 @@ const Game = {
     getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
     
     renderShops() {
+        // Stats
         const sDiv = document.getElementById('shopStats');
         if(sDiv) {
             sDiv.innerHTML = "";
@@ -154,17 +202,19 @@ const Game = {
                 let btn = lvl >= 10 
                     ? `<button class="buy-btn" disabled>MAX</button>` 
                     : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
-                sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3>${btn}</div>`;
+                sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3><p>Level ${lvl}</p>${btn}</div>`;
             });
         }
+        // Items
         const iDiv = document.getElementById('shopItems');
         if(iDiv) {
             iDiv.innerHTML = "";
             [{k:'fifty',c:50},{k:'freeze',c:75},{k:'skip',c:100}].forEach(it => {
-                let count = this.config.items[it.k] || 0;
-                iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
+                let count = this.config.items[it.k];
+                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
             });
         }
+        // Gear
         const gDiv = document.getElementById('shopGear');
         if(gDiv) {
             gDiv.innerHTML = "";
@@ -179,16 +229,23 @@ const Game = {
     },
 
     buyUpgrade(stat) {
-        let cost = this.getCost(this.config.stats[stat]);
-        if(this.config.gold >= cost && this.config.stats[stat] < 10) {
-            this.config.gold -= cost; this.config.stats[stat]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
+        let lvl = this.config.stats[stat];
+        let cost = this.getCost(lvl);
+        if(this.config.gold >= cost && lvl < 10) {
+            this.config.gold -= cost;
+            this.config.stats[stat]++;
+            this.saveConfig();
+            this.renderShops();
+            this.updateMenuUI();
         }
     },
     buyItem(key, cost) {
         if(this.config.gold >= cost) {
-            this.config.gold -= cost; this.config.items[key]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
+            this.config.gold -= cost;
+            this.config.items[key]++;
+            this.saveConfig();
+            this.renderShops();
+            this.updateMenuUI();
         }
     },
     handleGear(id, cost) {
@@ -211,55 +268,61 @@ const Game = {
 
     switchTab(tab) {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        // Highlight active
+        let btns = document.querySelectorAll('.nav-btn');
+        if(tab === 'stats') btns[0].classList.add('active');
+        if(tab === 'items') btns[1].classList.add('active');
+        if(tab === 'gear') btns[2].classList.add('active');
+
+        // Show correct section
         ['shopStats','shopItems','shopGear'].forEach(id => {
              const el = document.getElementById(id);
              if(el) el.style.display = 'none';
         });
-        // No 'run' tab logic needed, play button is global
-        const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
-        if(el) el.style.display = 'grid';
         
-        // Highlight
-        const btnMap = {'stats':0, 'items':1, 'gear':2};
-        if(document.querySelectorAll('.nav-btn')[btnMap[tab]])
-            document.querySelectorAll('.nav-btn')[btnMap[tab]].classList.add('active');
+        // Logic for the new UI where play is separate
+        if(tab === 'run') {
+            // 'run' isn't a tab anymore in the shop view, it's the main menu state
+            // But we keep the function signature for compatibility
+        } else {
+            const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
+            if(el) el.style.display = 'grid';
+        }
     },
 
-    // --- GAMEPLAY ---
+    // --- GAMEPLAY LOOP ---
     startRun() {
+        // Filter deck by active files
         let deck = this.library.filter(q => this.config.activeFiles.includes(q._src));
-        if(deck.length === 0) deck = this.library;
+        if(deck.length === 0) deck = this.library; // Fallback
 
-        let hpBonus = this.config.stats.hearts; 
-        let timeBonus = this.config.stats.timer * 5;
-        
-        // Calculate Gear Stats
-        let gStats = { hp:0, time:0, gold:0 };
+        // Apply Gear Stats
+        let gearStats = { hp:0, time:0, gold:0 };
         Object.values(this.player.gear).forEach(id => {
             let g = gearConfig.find(x=>x.id===id);
             if(g) {
-                if(g.stat.includes("Time")) gStats.time += parseInt(g.stat.split('+')[1]);
-                if(g.stat.includes("HP")) gStats.hp += parseInt(g.stat.split('+')[1]);
-                if(g.stat.includes("Gold")) gStats.gold += parseInt(g.stat.split('+')[1]);
+                if(g.stat.includes("Time")) gearStats.time += parseInt(g.stat.split('+')[1]);
+                if(g.stat.includes("HP")) gearStats.hp += parseInt(g.stat.split('+')[1]);
+                if(g.stat.includes("Gold")) gearStats.gold += parseInt(g.stat.split('+')[1]);
             }
         });
 
         this.run = {
-            hp: 3 + Math.floor(hpBonus/2) + gStats.hp,
+            hp: 1 + Math.floor(this.config.stats.hearts/2) + gearStats.hp,
             score: 0,
             gold: 0,
             deck: deck, 
             playDeck: [], 
-            timerMax: 30 + timeBonus + gStats.time,
+            timerMax: 30 + (this.config.stats.timer * 5) + gearStats.time,
             timeLeft: 30,
             freeze: false,
             chain: null,
-            goldMulti: 1 + (this.config.stats.greed * 0.1) + (gStats.gold/100)
+            goldMulti: 1 + (this.config.stats.greed * 0.1) + (gearStats.gold / 100)
         };
 
         this.renderAvatar('g');
-        document.getElementById('menuScreen').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('hidden');
+        this.safeClassAdd('menuScreen', 'hidden');
+        this.safeClassRemove('gameScreen', 'hidden');
         this.updateHUD();
         this.nextQ();
     },
@@ -267,6 +330,7 @@ const Game = {
     nextQ() {
         if(this.run.hp <= 0) return this.gameOver();
 
+        // 1. Chains
         if(this.run.chain) {
             this.run.chain.step++;
             if(this.run.chain.step >= this.run.chain.data.steps.length) {
@@ -277,12 +341,15 @@ const Game = {
             }
         }
 
+        // 2. Refill Deck
         if(this.run.playDeck.length === 0) {
             this.run.playDeck = [...this.run.deck].sort(() => Math.random() - 0.5);
         }
 
+        // 3. Pick
         let template = this.run.playDeck.pop();
 
+        // 4. Render
         if(template.type === 'chain') {
             this.run.chain = { data: template.data, step: 0 };
             this.renderChainStep();
@@ -291,7 +358,10 @@ const Game = {
             try {
                 let isBoss = (this.run.score > 0 && (this.run.score+1) % 10 === 0);
                 content = template.gen ? template.gen(isBoss) : template.data;
-            } catch(e) { return this.nextQ(); }
+            } catch(e) {
+                console.error("Gen Error", e);
+                return this.nextQ();
+            }
             this.renderInput('choice', content);
         }
     },
@@ -303,10 +373,11 @@ const Game = {
             preBox.style.display = 'block';
             preBox.innerHTML = this.formatMath(this.run.chain.data.preamble);
         }
-        const hudChain = document.getElementById('hudChain');
-        if(hudChain) {
-            hudChain.style.display = 'block';
-            hudChain.innerText = `CHAIN ${this.run.chain.step+1}/${this.run.chain.data.steps.length}`;
+        // Show chain HUD
+        const chainHud = document.getElementById('hudChain');
+        if(chainHud) {
+            chainHud.style.display = 'block';
+            chainHud.innerText = `CHAIN: ${this.run.chain.step + 1}/${this.run.chain.data.steps.length}`;
         }
         this.renderInput('choice', stepData, true);
     },
@@ -315,23 +386,30 @@ const Game = {
         this.currentQ = { ...content, type: type };
 
         if(!keepPreamble) {
-            document.getElementById('preambleBox').style.display = 'none';
-            document.getElementById('hudChain').style.display = 'none';
+            const pre = document.getElementById('preambleBox');
+            if(pre) pre.style.display = 'none';
+            const ch = document.getElementById('hudChain');
+            if(ch) ch.style.display = 'none';
             if(content.preamble) {
-                 document.getElementById('preambleBox').style.display = 'block';
-                 document.getElementById('preambleBox').innerHTML = this.formatMath(content.preamble);
+                 pre.style.display = 'block';
+                 pre.innerHTML = this.formatMath(content.preamble);
             }
         }
 
         const qText = document.getElementById('qText');
         qText.innerHTML = this.formatMath(content.q);
-        if(window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise([document.getElementById('qArea')]);
+        
+        // Force MathJax Update
+        if(window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise([document.getElementById('qArea'), document.getElementById('preambleBox')]);
+        }
 
         const inp = document.getElementById('inputContainer');
         inp.innerHTML = `<div class="choice-grid"></div>`;
         const grid = inp.querySelector('.choice-grid');
         
         let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
+        
         opts.forEach(opt => {
             let btn = document.createElement('button');
             btn.className = 'ans-btn';
@@ -339,6 +417,7 @@ const Game = {
             btn.onclick = () => this.handleAnswer(opt == content.a);
             grid.appendChild(btn);
         });
+
         if(window.MathJax) window.MathJax.typesetPromise([grid]);
 
         this.run.timeLeft = this.run.timerMax;
@@ -373,12 +452,12 @@ const Game = {
     },
 
     updateHUD() {
-        document.getElementById('hudLives').innerText = "❤️".repeat(this.run.hp);
-        document.getElementById('hudGold').innerText = this.run.gold;
+        this.safeText('hudLives', "❤️".repeat(this.run.hp));
+        this.safeText('hudGold', this.run.gold);
         ['Fifty','Freeze','Skip'].forEach(k => {
             let key = k.toLowerCase();
-            if(document.getElementById('count'+k)) 
-                 document.getElementById('count'+k).innerText = this.config.items[key];
+            if(document.getElementById('count'+key)) 
+                 document.getElementById('count'+key).innerText = this.config.items[key];
         });
     },
 
@@ -394,16 +473,18 @@ const Game = {
         if(this.run.score > this.config.best) this.config.best = this.run.score;
         this.saveConfig();
         
-        document.getElementById('gameScreen').classList.add('hidden');
-        document.getElementById('gameOverScreen').classList.remove('hidden');
-        document.getElementById('endScore').innerText = this.run.score;
-        document.getElementById('endGold').innerText = this.run.gold;
+        this.safeClassAdd('gameScreen', 'hidden');
+        this.safeClassRemove('gameOverScreen', 'hidden');
+        
+        this.safeText('endScore', this.run.score);
+        this.safeText('endGold', this.run.gold);
         
         const dQ = document.getElementById('deathQ');
         const dAns = document.getElementById('deathAns');
         if(dQ && this.currentQ) {
             dQ.innerHTML = this.formatMath(this.currentQ.q);
-            dAns.innerHTML = this.formatMath(this.currentQ.a.toString());
+            let ansTxt = (this.currentQ.type === 'choice') ? this.currentQ.a.toString() : "See above";
+            dAns.innerHTML = this.formatMath(ansTxt);
             if(window.MathJax) MathJax.typesetPromise([dQ, dAns]);
         }
     },
@@ -418,18 +499,18 @@ const Game = {
     
     // --- SETTINGS ---
     openSettings() { 
-        document.getElementById('settingsOverlay').classList.remove('hidden');
+        this.safeClassRemove('settingsOverlay', 'hidden'); 
         const area = document.getElementById('settingsArea');
         area.innerHTML = "";
         
-        // Dedupe sources
-        const sources = [...new Set(this.library.map(q => q._src))];
+        let sources = [...new Set(this.library.map(q => q._src))];
         
         sources.forEach(src => {
              let isActive = this.config.activeFiles.includes(src);
              let div = document.createElement('div');
              div.className = "setting-row";
              let meta = this.manifest.find(m=>m.id===src) || {name: src.toUpperCase()};
+             
              div.innerHTML = `<span>${meta.name}</span> <div class="toggle-btn ${isActive?'active':''}" onclick="Game.toggleFile('${src}', this)"></div>`;
              area.appendChild(div);
         });
@@ -446,24 +527,7 @@ const Game = {
     closeSettings() {
         if(this.config.activeFiles.length === 0) return alert("Select 1!");
         this.saveConfig();
-        document.getElementById('settingsOverlay').classList.add('hidden');
-        location.reload();
-    },
-
-    pauseGame() {
-        this.safeClassRemove('pauseOverlay', 'hidden');
-        clearInterval(this.run.timerInterval);
-    },
-    resumeGame() {
-        this.safeClassAdd('pauseOverlay', 'hidden');
-        this.renderTimer();
-        this.run.timerInterval = setInterval(() => {
-            if(!this.run.freeze && !this.scratch.active) this.run.timeLeft--;
-            this.renderTimer();
-            if(this.run.timeLeft <= 0) this.handleAnswer(false);
-        }, 1000);
-    },
-    quitRun() {
+        this.safeClassAdd('settingsOverlay', 'hidden');
         location.reload();
     },
 
@@ -510,6 +574,7 @@ const Game = {
         canvas.addEventListener('touchmove', move, {passive: false});
         canvas.addEventListener('touchend', end);
     },
+    
     toggleScratch() {
         this.scratch.active = !this.scratch.active;
         if(this.scratch.active) {
@@ -522,13 +587,47 @@ const Game = {
         }
     },
 
-    // --- UTILS ---
-    safeClassRemove(id, cls) { const el = document.getElementById(id); if(el) el.classList.remove(cls); },
-    safeClassAdd(id, cls) { const el = document.getElementById(id); if(el) el.classList.add(cls); },
-    safeText(id, txt) { const el = document.getElementById(id); if(el) el.innerText = txt; }
+    pauseGame() {
+        this.safeClassRemove('pauseOverlay', 'hidden');
+        clearInterval(this.run.timerInterval);
+    },
+    resumeGame() {
+        this.safeClassAdd('pauseOverlay', 'hidden');
+        this.renderTimer();
+        this.run.timerInterval = setInterval(() => {
+            if(!this.run.freeze && !this.scratch.active) this.run.timeLeft--;
+            this.renderTimer();
+            if(this.run.timeLeft <= 0) this.handleAnswer(false);
+        }, 1000);
+    },
+    quitRun() {
+        location.reload();
+    },
+
+    // --- POWERUPS ---
+    usePowerup(type) {
+        if(this.config.items[type] <= 0) return;
+        if(type === 'skip') {
+            this.config.items.skip--;
+            this.saveConfig();
+            this.nextQ();
+        }
+        if(type === 'fifty') { 
+             // Simplified 50/50
+             let grid = document.querySelector('.choice-grid');
+             if(grid) {
+                 let wrongs = Array.from(grid.children).filter(b => !b.onclick.toString().includes('true'));
+                 if(wrongs[0]) wrongs[0].style.opacity = 0;
+                 if(wrongs[1]) wrongs[1].style.opacity = 0;
+                 this.config.items.fifty--;
+                 this.saveConfig();
+             }
+        }
+        this.updateHUD();
+    }
 };
 
-// Gear Config
+// Configs
 const gearConfig = [
     { id: 101, type: 'head', name: "Beanie", icon: "🧢", cost: 150, stat: "Time +5" },
     { id: 102, type: 'head', name: "Crown", icon: "👑", cost: 1000, stat: "Gold +50%" },
