@@ -1,61 +1,26 @@
 Game.addPack({
-    id: "starter_pack_01",
+    id: "starter_pack",
     name: "Starter Content",
     questions: [
-        // --- Psychology (Static) ---
         {
-            subject: "Psychology",
-            topic: "Biological",
-            type: "match",
-            data: {
-                q: "Match the Localization",
-                pairs: [
-                    { left: "Hippocampus", right: "Memory" },
-                    { left: "Amygdala", right: "Emotion" },
-                    { left: "Broca Area", right: "Speech Prod." },
-                    { left: "Wernicke Area", right: "Understanding" }
-                ]
-            }
-        },
-        // --- TOK (Static) ---
-        {
-            subject: "TOK",
-            topic: "Core",
-            type: "blank",
-            data: {
-                q: "___ is justified true belief.",
-                a: "Knowledge",
-                w: ["Truth", "Wisdom", "Evidence", "Perspective"]
-            }
-        },
-        // --- Math (Dynamic with LaTeX) ---
-        {
-            subject: "IB Math AA",
+            type: "choice",
+            subject: "Math",
             topic: "Algebra",
-            type: "choice",
-            gen: (isBoss) => {
-                let u1 = Math.floor(Math.random()*20)-10;
-                let d = Math.floor(Math.random()*10)-5 || 2;
-                let n = 10;
-                return {
-                    q: `u_1=${u1}, d=${d}. \\text{ Find } u_{${n}}`,
-                    a: u1 + (n-1)*d,
-                    w: [u1+n*d, u1+(n+1)*d, u1-d]
-                };
+            gen: () => {
+                let x = Math.floor(Math.random() * 10) + 2;
+                return { q: `Solve $2x = ${2*x}$`, a: x, w: [x+1, x-1, 0] };
             }
         },
+        // Chain Question Example
         {
-            subject: "IB Math AA",
-            topic: "Calculus",
-            type: "choice",
-            gen: (isBoss) => {
-                let p = Math.floor(Math.random()*4)+2;
-                return {
-                    q: `\\frac{d}{dx} x^${p}`,
-                    a: `${p}x^${p-1}`,
-                    w: [`x^${p-1}`, `x^${p+1}`, `${p}x`]
-                };
-            }
+            type: 'chain',
+            subject: 'Math AA',
+            topic: 'Functions',
+            preamble: "Consider $f(x) = x^2 - 4x + 3$.",
+            steps: [
+                { q: "Find the y-intercept.", a: 3, w: [0, -4, 1] },
+                { q: "Find the vertex x-coordinate.", a: 2, w: [-2, 4, -4] }
+            ]
         }
     ]
 });

@@ -3,145 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Universal Review Rogue</title>
+    <title>Knowledge Rogue: Master</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <style>
-        :root { --bg:#15151a; --panel:#202028; --gold:#f1c40f; --text:#ecf0f1; --green:#27ae60; --red:#c0392b; --blue:#2980b9; --accent: #9b59b6; }
-        @font-face { font-family: 'Retro'; src: local('Courier New'), monospace; }
-        body { margin:0; overflow:hidden; background:var(--bg); font-family:'Segoe UI',Tahoma,sans-serif; color:var(--text); touch-action:none; user-select:none; }
-        
-        /* --- UTILS --- */
-        .screen { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; overflow:hidden; }
-        .hidden { display:none !important; }
-        .center { display:flex; align-items:center; justify-content:center; }
-        
-        /* --- MENU --- */
-        .menu-container { width:95%; max-width:600px; margin:0 auto; text-align:center; display:flex; flex-direction:column; gap:10px; height: 100%; padding-top: 10px; }
-        .stat-row { display:flex; justify-content:space-between; background:var(--panel); padding:10px; border-radius:8px; border:1px solid #444; font-weight: bold; }
-        
-        .mode-btn { padding:15px; font-size:1.2rem; background:var(--green); border:none; border-radius:8px; color:white; font-weight:bold; cursor:pointer; width:100%; position: relative; overflow: hidden; margin-bottom: 10px; }
-        
-        /* --- SETTINGS (Dynamic) --- */
-        #settingsArea { flex-grow:1; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; text-align:left; margin:5px 0; border: 1px solid #333; display:none; }
-        #settingsArea.active { display:block; }
-        .subject-group { margin-bottom:15px; }
-        .subject-title { font-weight:bold; color:var(--gold); border-bottom:1px solid #555; margin-bottom:5px; }
-        .topic-toggle { display:flex; justify-content:space-between; padding:8px; background:#2a2a35; margin-bottom:2px; border-radius:4px; cursor:pointer;}
-        .topic-toggle.active { background:var(--blue); }
-        
-        /* --- SHOP UI --- */
-        .shop-nav { display: flex; gap: 5px; margin-bottom: 5px; }
-        .nav-btn { flex: 1; background: #333; border:none; color: #888; padding: 10px 5px; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 0.9rem;}
-        .nav-btn.active { background: var(--accent); color: white; }
-        .shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-grow: 1; overflow-y: auto; padding-bottom: 20px; display: none; }
-        .shop-grid.active { display: grid; }
-        .shop-item { background: var(--panel); padding: 10px; border-radius: 8px; border: 1px solid #444; display: flex; flex-direction: column; align-items: center; text-align: center; }
-        .buy-btn { background: var(--green); color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; width: 100%; margin-top: 5px; }
-        .buy-btn:disabled { background: #333; color: #555; }
-
-        /* --- AVATAR --- */
-        .avatar-box { width: 60px; height: 90px; position: relative; margin: 0 auto; transform: scale(0.8); }
-        .base-part { position: absolute; background: #555; border-radius: 4px; left: 50%; transform: translateX(-50%); }
-        .base-head { top: 5px; width: 35px; height: 35px; display: flex; justify-content: center; align-items: center; font-size: 28px; z-index: 5; }
-        .base-torso { top: 45px; width: 30px; height: 40px; z-index: 4; border-radius: 6px; }
-        .base-legs  { top: 85px; width: 26px; height: 35px; z-index: 3; background: #444; }
-        .layer { position: absolute; left: 50%; transform: translateX(-50%); display:flex; justify-content:center; align-items:center; pointer-events: none;}
-        .l-head { top: -18px; z-index: 20; font-size: 32px; width: 60px; text-align: center; } 
-        .l-body { top: 45px; z-index: 15; font-size: 32px; } 
-        .l-feet { top: 85px; z-index: 16; font-size: 26px; } 
-        .l-main { top: 50px; left: 90%; z-index: 25; font-size: 24px; transform: rotate(-10deg); } 
-        .l-off  { top: 50px; left: 10%; z-index: 24; font-size: 24px; }
-
-        /* --- GAME HUD --- */
-        #gameHUD { height:90px; display:flex; justify-content:space-between; align-items:flex-start; padding:10px 20px; background:rgba(0,0,0,0.4); }
-        .powerup-bar { display: flex; gap: 15px; margin-top: 5px; }
-        .p-btn { width: 45px; height: 45px; border-radius: 50%; border: 2px solid #555; background: #333; color: white; font-size: 20px; cursor: pointer; position: relative; display: flex; justify-content: center; align-items: center; }
-        .p-btn:active { transform: scale(0.95); }
-        .p-count { position: absolute; top: -5px; right: -5px; background: var(--red); font-size: 10px; width: 18px; height: 18px; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 1px solid white; }
-        .p-btn.disabled { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
-        .p-btn.unavailable { opacity: 0.2; pointer-events: none; border-color: #333; } /* For logic disable */
-
-        #qArea { flex-grow:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; font-size:1.3rem; text-align:center; overflow-y:auto; }
-        
-        /* --- INPUT AREAS --- */
-        #inputContainer { height:40%; background:var(--panel); display:flex; flex-direction:column; }
-        
-        /* Type: Choice */
-        .choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px; height:100%; }
-        .ans-btn { background:#34495e; color:white; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; transition: 0.2s; }
-        .ans-btn.vanish { opacity: 0; pointer-events: none; }
-        
-        /* Type: Match */
-        .match-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px; height:100%; }
-        .match-item { background:#333; display:flex; align-items:center; justify-content:center; border-radius:5px; cursor:pointer; font-size:0.9rem; padding:5px; border:2px solid transparent; }
-        .match-item.selected { border-color:var(--gold); background:#444; }
-        .match-item.solved { opacity:0; pointer-events:none; }
-
-        /* Type: Blank */
-        .word-bank { display:flex; flex-wrap:wrap; gap:10px; padding:15px; justify-content:center; }
-        .word-chip { background:var(--blue); padding:10px 20px; border-radius:20px; cursor:pointer; }
-        .blank-slot { border-bottom:2px solid white; padding:0 10px; color:var(--gold); min-width:50px; display:inline-block; text-align:center;}
-    </style>
 </head>
 <body>
 
 <!-- LOADING -->
-<div id="loader" class="screen center" style="background:#000; z-index:1000;">
-    <h2 style="color:var(--green)">LOADING LIBRARY...</h2>
-    <div id="loadLog" style="color:#777; font-size:0.8rem;">Fetching manifest...</div>
+<div id="loader" class="screen center">
+    <h2 style="color:var(--green)">LOADING SYSTEM</h2>
+    <div class="loader-bar-box"><div class="loader-bar" id="loaderBar"></div></div>
+    <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Initializing...</div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index:200;">
+    <h2 style="color:white;">CURRICULUM</h2>
+    <div id="settingsArea" style="max-height: 60%; overflow-y: auto; width: 90%; max-width: 400px;"></div>
+    <button class="big-btn" onclick="Game.closeSettings()">SAVE & CLOSE</button>
 </div>
 
 <!-- MENU -->
-<div id="menuScreen" class="screen hidden">
+<div id="menuScreen" class="screen center hidden">
     <div class="menu-container">
-        <div style="display:flex; align-items:center; justify-content: space-between;">
-            <!-- Avatar -->
-            <div class="avatar-box">
-                <div class="base-part base-legs"></div>
-                <div class="base-part base-torso"></div>
-                <div class="base-part base-head" id="p-face">😐</div>
-                <div class="layer l-feet" id="p-feet"></div>
-                <div class="layer l-body" id="p-body"></div>
-                <div class="layer l-head" id="p-head"></div>
-                <div class="layer l-off" id="p-off"></div>
-                <div class="layer l-main" id="p-main"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="text-align:left;">
+                <h1 style="margin:0; font-size:1.5rem;">MATH ROGUE</h1>
+                <div style="font-size:0.8rem; color:#777">Best: <span id="menuBest">0</span></div>
             </div>
             <div style="text-align:right;">
-                <h2 style="margin:0;">KNOWLEDGE<br>ROGUE</h2>
-                <div style="color:var(--gold)">🪙 <span id="menuGold">0</span></div>
-                <div style="color:#777; font-size:0.8rem;">Best: <span id="menuBest">0</span></div>
+                <div style="color:var(--gold); font-size:1.2rem; font-weight:bold;">🪙 <span id="menuGold">0</span></div>
             </div>
         </div>
 
-        <!-- NAVIGATION -->
+        <!-- Avatar -->
+        <div class="avatar-box">
+            <div class="base-part base-legs"></div>
+            <div class="base-part base-torso"></div>
+            <div class="base-part base-head" id="p-face">😐</div>
+            <div class="layer l-feet" id="p-feet"></div>
+            <div class="layer l-body" id="p-body"></div>
+            <div class="layer l-head" id="p-head"></div>
+            <div class="layer l-off" id="p-off"></div>
+            <div class="layer l-main" id="p-main"></div>
+        </div>
+
         <div class="shop-nav">
-            <button class="nav-btn active" onclick="Game.switchTab('run')">RUN</button>
-            <button class="nav-btn" onclick="Game.switchTab('stats')">UPGRADE</button>
+            <button class="nav-btn active" onclick="Game.switchTab('run')">PLAY</button>
+            <button class="nav-btn" onclick="Game.switchTab('stats')">SKILLS</button>
             <button class="nav-btn" onclick="Game.switchTab('items')">ITEMS</button>
             <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
         </div>
 
-        <!-- TAB: RUN (Settings) -->
-        <div id="tabRun" class="shop-grid active" style="display:block;">
+        <!-- RUN TAB -->
+        <div id="tabRun" class="shop-grid active" style="display:flex; flex-direction:column;">
             <button class="mode-btn" onclick="Game.start('standard')">START RUN</button>
-            <div style="text-align:left; padding-left:5px; font-weight:bold; color:#777;">ENABLED TOPICS:</div>
-            <div id="settingsArea" class="active"></div>
+            <button class="mode-btn" onclick="Game.openSettings()" style="background:#444;">⚙️ SETTINGS</button>
+            <div style="color:#777; font-size:0.8rem; margin-top:10px;">Active Questions: <span id="poolSize">0</span></div>
         </div>
 
-        <!-- TAB: SHOPS -->
-        <div id="shopStats" class="shop-grid"></div>
-        <div id="shopItems" class="shop-grid"></div>
-        <div id="shopGear" class="shop-grid"></div>
+        <div id="shopStats" class="shop-grid hidden"></div>
+        <div id="shopItems" class="shop-grid hidden"></div>
+        <div id="shopGear" class="shop-grid hidden"></div>
     </div>
 </div>
 
 <!-- GAME -->
 <div id="gameScreen" class="screen hidden">
     <div id="gameHUD">
-        <div>
-            <div style="font-size:1.5rem;" id="hudLives">❤️❤️❤️</div>
-            <div style="color:var(--gold); font-weight:bold;" id="hudGold">0g</div>
-            
+        <div style="flex:1;">
+            <div style="font-size:1.3rem;" id="hudLives">❤️❤️❤️</div>
+            <div style="color:var(--gold);">🪙 <span id="hudGold">0</span></div>
+            <!-- Powerups -->
             <div class="powerup-bar">
                 <div class="p-btn" id="btnFifty" onclick="Game.usePowerup('fifty')">
                     ✂️ <div class="p-count" id="countFifty">0</div>
@@ -155,8 +94,14 @@
             </div>
         </div>
         
+        <!-- Boss UI -->
+        <div id="bossContainer" style="display:none;">
+            <div id="bossTitle" style="color:var(--red); font-weight:bold;">BOSS</div>
+            <div id="bossHealth" style="font-size:1.5rem;">💜💜💜</div>
+        </div>
+
         <!-- In-Game Avatar -->
-        <div class="avatar-box" style="transform:scale(1.2); margin-top:10px;">
+        <div class="avatar-box" style="transform: scale(0.9);">
              <div class="base-part base-legs"></div>
              <div class="base-part base-torso"></div>
              <div class="base-part base-head" id="g-face">😐</div>
@@ -169,473 +114,33 @@
     </div>
 
     <div style="height:5px; background:#333;"><div id="timerBar" style="height:100%; width:100%; background:var(--green);"></div></div>
-    
+
     <div id="qArea">
-        <div id="bossTag" style="display:none; color:var(--red); font-weight:bold;">⚠️ BOSS ⚠️</div>
-        <div id="qText">Loading...</div>
+        <div id="preambleBox"></div>
+        <div id="qText">...</div>
     </div>
-    
+
     <div id="inputContainer"></div>
 </div>
 
-<script>
-/* --- CONFIG DATA --- */
-const FACES = ['😐', '😎', '🤠', '🤡', '👽', '💀', '🤖', '😈', '🐹', '🥶'];
-const SAVE_KEY = "univRogue_v1";
-const UPGRADE_COSTS = [100, 300, 600, 1000, 1800]; 
+<!-- GAME OVER -->
+<div id="gameOverScreen" class="screen center hidden" style="background:rgba(0,0,0,0.9);">
+    <h1 style="color:var(--red)">DEFEAT</h1>
+    <h2>Score: <span id="endScore">0</span></h2>
+    <div id="deathRecapBox" style="width:80%; padding:15px; border:1px solid var(--red); background:#221111; border-radius:8px;">
+        <div style="color:var(--red); font-size:0.8rem;">FATAL QUESTION:</div>
+        <div id="deathQ" style="margin:10px 0;"></div>
+        <div style="color:var(--green); font-size:0.8rem;">ANSWER:</div>
+        <div id="deathAns" style="font-weight:bold;"></div>
+    </div>
+    <button class="big-btn" onclick="location.reload()">RETURN</button>
+</div>
 
-const statConfig = {
-    hearts: { name: "Vitality", desc: "+1 Max Heart", cost: UPGRADE_COSTS },
-    timer:  { name: "Chronos", desc: "+10s Time", cost: UPGRADE_COSTS },
-    heal:   { name: "Vampirism", desc: "Heal on Streak", cost: UPGRADE_COSTS },
-    greed:  { name: "Greed", desc: "+20% Gold", cost: UPGRADE_COSTS }
-};
-const itemConfig = {
-    fifty:  { name: "50/50", desc: "Remove 2 answers", cost: 50, icon: "✂️" },
-    freeze: { name: "Time Freeze", desc: "Stop timer (10s)", cost: 75, icon: "❄️" },
-    skip:   { name: "Skip Card", desc: "Skip question", cost: 100, icon: "⏭️" }
-};
-const gearConfig = [
-    { id: 101, type: 'head', name: "Beanie", icon: "🧢", cost: 150, stat: "Time +5" },
-    { id: 102, type: 'head', name: "Crown", icon: "👑", cost: 1000, stat: "Gold +50%" },
-    { id: 103, type: 'head', name: "Wizard", icon: "🧙", cost: 500, stat: "Time +15" },
-    { id: 201, type: 'body', name: "Tee", icon: "👕", cost: 150, stat: "HP +1" },
-    { id: 202, type: 'body', name: "Suit", icon: "👔", cost: 400, stat: "Gold +10%" },
-    { id: 204, type: 'body', name: "Coat", icon: "🥼", cost: 600, stat: "HP +2" },
-    { id: 301, type: 'main', name: "Pencil", icon: "✏️", cost: 100, stat: "Gold +5%" },
-    { id: 302, type: 'main', name: "Sword", icon: "🗡️", cost: 800, stat: "Gold +20%" },
-    { id: 401, type: 'off', name: "Calc", icon: "📱", cost: 500, stat: "Time +10" },
-    { id: 402, type: 'off', name: "Shield", icon: "🛡️", cost: 400, stat: "Block 10%" }
-];
+<!-- 1. LOAD ENGINE -->
+<script src="engine.js"></script>
+<!-- 2. LOAD CONTENT DIRECTLY -->
+<script src="content/math_core.js"></script>
+<script src="content/extras.js"></script>
 
-/* ================= GAME ENGINE ================= */
-const Game = {
-    pool: [], 
-    activeDeck: [],
-    state: { hp:3, maxHp:3, score:0, gold:0, mode:'standard', time:30, timerInterval:null, freeze:false },
-    settings: {}, 
-    player: { gold:0, best:0, face:null, stats:{hearts:0,timer:0,heal:0,greed:0}, items:{fifty:0,freeze:0,skip:0}, gear:{head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] },
-    currentQ: null,
-    
-    async init() {
-        this.loadSave();
-        if(!this.player.face) this.player.face = FACES[Math.floor(Math.random() * FACES.length)];
-        
-        try {
-            const resp = await fetch('library.json');
-            const manifest = await resp.json();
-            for(let item of manifest) {
-                document.getElementById('loadLog').innerText = `Loading ${item.name}...`;
-                await this.loadScript(item.file);
-            }
-            this.buildMenu();
-            document.getElementById('loader').classList.add('hidden');
-            document.getElementById('menuScreen').classList.remove('hidden');
-        } catch(e) {
-            alert("Error loading library.json. Ensure files are in place.");
-            console.error(e);
-        }
-    },
-
-    loadScript(src) {
-        return new Promise((resolve, reject) => {
-            let s = document.createElement('script');
-            s.src = src;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.body.appendChild(s);
-        });
-    },
-
-    addPack(pack) {
-        pack.questions.forEach(q => {
-            q._origin = pack.name;
-            this.pool.push(q);
-        });
-    },
-
-    // --- MENU & SHOP ---
-    buildMenu() {
-        this.renderAvatar('p');
-        this.renderShop('shopStats', statConfig);
-        this.renderShopItems('shopItems', itemConfig);
-        this.renderShopGear('shopGear', gearConfig);
-        this.updateMenuUI();
-
-        // Settings
-        const container = document.getElementById('settingsArea');
-        container.innerHTML = "";
-        let tree = {};
-        this.pool.forEach(q => {
-            if(!tree[q.subject]) tree[q.subject] = new Set();
-            tree[q.subject].add(q.topic);
-        });
-        for(let subj in tree) {
-            let div = document.createElement('div');
-            div.className = 'subject-group';
-            div.innerHTML = `<div class="subject-title">${subj}</div>`;
-            tree[subj].forEach(topic => {
-                let key = `${subj}_${topic}`;
-                if(this.settings[key] === undefined) this.settings[key] = true;
-                let btn = document.createElement('div');
-                btn.className = `topic-toggle ${this.settings[key] ? 'active' : ''}`;
-                btn.innerText = topic;
-                btn.onclick = () => {
-                    this.settings[key] = !this.settings[key];
-                    btn.className = `topic-toggle ${this.settings[key] ? 'active' : ''}`;
-                    this.saveData();
-                };
-                div.appendChild(btn);
-            });
-            container.appendChild(div);
-        }
-    },
-    
-    renderAvatar(prefix) {
-        document.getElementById(prefix+'-face').innerText = this.player.face;
-        ['head','body','main','off','feet'].forEach(s => {
-             let g = gearConfig.find(x => x.id === this.player.gear[s]);
-             let el = document.getElementById(`${prefix}-${s}`);
-             if(el) el.innerText = g ? g.icon : "";
-        });
-    },
-
-    updateMenuUI() {
-        document.getElementById('menuGold').innerText = Math.floor(this.player.gold);
-        document.getElementById('menuBest').innerText = this.player.best;
-    },
-
-    switchTab(tabName) {
-        ['run','stats','items','gear'].forEach(t => {
-            let isTarget = (t === tabName) || (t === 'run' && tabName === 'run'); // Handle default
-            let display = (t === 'run') ? 'tabRun' : 'shop'+t.charAt(0).toUpperCase()+t.slice(1);
-            let nav = (t === 'run') ? (document.querySelectorAll('.nav-btn')[0]) : document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1));
-            
-            // Logic for button active state
-            let buttons = document.querySelectorAll('.nav-btn');
-            buttons.forEach(b => b.classList.remove('active'));
-            
-            // Show/Hide Containers
-            if(t === 'run') document.getElementById('tabRun').style.display = (tabName==='run') ? 'block' : 'none';
-            else document.getElementById('shop'+t.charAt(0).toUpperCase()+t.slice(1)).style.display = (tabName===t) ? 'grid' : 'none';
-        });
-        // Highlight active button
-        let idx = ['run','stats','items','gear'].indexOf(tabName);
-        document.querySelectorAll('.nav-btn')[idx].classList.add('active');
-    },
-
-    // Shop Renderers
-    renderShop(id, config) {
-        const div = document.getElementById(id);
-        div.innerHTML = "";
-        for(let k in config) {
-            let lvl = this.player.stats[k];
-            let isMax = lvl >= 5;
-            let cost = isMax ? 0 : config[k].cost[lvl];
-            div.innerHTML += `<div class="shop-item"><h3>${config[k].name} ${lvl}</h3><p>${config[k].desc}</p><button class="buy-btn" ${isMax || this.player.gold < cost ? 'disabled' : ''} onclick="Game.buyStat('${k}')">${isMax ? 'MAX' : cost + 'g'}</button></div>`;
-        }
-    },
-    renderShopItems(id, config) {
-        const div = document.getElementById(id);
-        div.innerHTML = "";
-        for(let k in config) {
-            let count = this.player.items[k];
-            div.innerHTML += `<div class="shop-item consumable"><div style="font-size:1.5rem">${config[k].icon}</div><h3>${config[k].name}</h3><p>Owned: ${count}</p><button class="buy-btn" ${this.player.gold < config[k].cost ? 'disabled' : ''} onclick="Game.buyItem('${k}')">${config[k].cost}g</button></div>`;
-        }
-    },
-    renderShopGear(id, config) {
-        const div = document.getElementById(id);
-        div.innerHTML = "";
-        config.sort((a,b)=>a.type.localeCompare(b.type));
-        config.forEach(g => {
-            let owned = this.player.unlockedGear.includes(g.id);
-            let equipped = this.player.gear[g.type] === g.id;
-            div.innerHTML += `<div class="shop-item"><div style="font-size:1.5rem">${g.icon}</div><h3>${g.name}</h3><p style="color:#f1c40f">${g.stat}</p><button class="buy-btn" ${!owned && this.player.gold < g.cost ? 'disabled' : ''} onclick="Game.handleGear(${g.id})">${owned ? (equipped?"UNEQUIP":"EQUIP") : g.cost+"g"}</button></div>`;
-        });
-    },
-
-    // Buying Logic
-    buyStat(key) {
-        let lvl = this.player.stats[key];
-        let cost = statConfig[key].cost[lvl];
-        if(this.player.gold >= cost) { this.player.gold -= cost; this.player.stats[key]++; this.saveData(); this.buildMenu(); }
-    },
-    buyItem(key) {
-        let cost = itemConfig[key].cost;
-        if(this.player.gold >= cost) { this.player.gold -= cost; this.player.items[key]++; this.saveData(); this.buildMenu(); }
-    },
-    handleGear(id) {
-        let item = gearConfig.find(x => x.id === id);
-        if(this.player.unlockedGear.includes(id)) {
-            this.player.gear[item.type] = (this.player.gear[item.type] === id) ? 0 : id;
-        } else if(this.player.gold >= item.cost) {
-            this.player.gold -= item.cost;
-            this.player.unlockedGear.push(id);
-            this.player.gear[item.type] = id;
-        }
-        this.saveData(); this.buildMenu();
-    },
-
-    // 3. GAME LOOP
-    getGearStats() {
-        let s = { hp:0, time:0, gold:0, block:0 };
-        Object.values(this.player.gear).forEach(id => {
-            if(!id) return;
-            let g = gearConfig.find(x=>x.id===id);
-            if(g.stat.includes("Time")) s.time += parseInt(g.stat.split('+')[1]);
-            if(g.stat.includes("HP")) s.hp += parseInt(g.stat.split('+')[1]);
-            if(g.stat.includes("Gold")) s.gold += parseInt(g.stat.split('+')[1]);
-            if(g.stat.includes("Block")) s.block += parseInt(g.stat.split(' ')[1]);
-        });
-        return s;
-    },
-
-    start(mode) {
-        this.activeDeck = this.pool.filter(q => this.settings[`${q.subject}_${q.topic}`]);
-        if(this.activeDeck.length === 0) return alert("Select at least one topic!");
-        
-        let gs = this.getGearStats();
-        this.state = { 
-            hp: 3 + this.player.stats.hearts + gs.hp,
-            maxHp: 3 + this.player.stats.hearts + gs.hp,
-            score: 0, 
-            gold: 0, 
-            timerMax: 30 + (this.player.stats.timer * 10) + gs.time, 
-            timeLeft: 30, 
-            goldMulti: 1 + (this.player.stats.greed * 0.2) + (gs.gold/100),
-            block: gs.block
-        };
-        
-        this.renderAvatar('g');
-        document.getElementById('menuScreen').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('hidden');
-        this.updateHUD();
-        this.nextQ();
-    },
-
-    updateHUD() {
-        let h = "❤️".repeat(this.state.hp);
-        let m = "<span style='opacity:0.2'>❤️</span>".repeat(Math.max(0, this.state.maxHp - this.state.hp));
-        document.getElementById('hudLives').innerHTML = h + m;
-        document.getElementById('hudScore').innerText = this.state.score;
-        document.getElementById('hudGold').innerText = Math.floor(this.state.gold) + "g";
-
-        // Update Powerups
-        ['Fifty','Freeze','Skip'].forEach(k => {
-            let key = k.toLowerCase();
-            let count = this.player.items[key];
-            document.getElementById('count'+k).innerText = count;
-            let btn = document.getElementById('btn'+k);
-            if(count>0) btn.classList.remove('disabled'); else btn.classList.add('disabled');
-        });
-    },
-
-    usePowerup(type) {
-        if(this.player.items[type] <= 0) return;
-        
-        if(type === 'fifty') {
-            if(this.currentQ.type !== 'choice') return; // Logic check
-            let btns = document.querySelectorAll('.ans-btn');
-            // Basic removal of 2 wrong
-            let wrongs = [];
-            btns.forEach((b, i) => {
-                // We stored index in onclick closure, hard to retrieve. 
-                // Hack: check innerText vs correct answer
-                // Better: Only use valid if type is choice
-            });
-            // Quick Fix: Visually remove 2 random wrong buttons
-             let grid = document.querySelector('.choice-grid');
-             let correctBtn = Array.from(grid.children).find(b => b._isCorrect);
-             let wrongBtns = Array.from(grid.children).filter(b => !b._isCorrect);
-             wrongBtns.sort(()=>Math.random()-0.5);
-             if(wrongBtns[0]) wrongBtns[0].classList.add('vanish');
-             if(wrongBtns[1]) wrongBtns[1].classList.add('vanish');
-             
-             this.player.items.fifty--;
-        } 
-        else if(type === 'freeze') {
-            this.state.freeze = true;
-            document.getElementById('timerBar').style.background = "#3498db";
-            setTimeout(()=>{ this.state.freeze=false; }, 10000);
-            this.player.items.freeze--;
-        }
-        else if(type === 'skip') {
-            this.player.items.skip--;
-            this.saveData();
-            this.nextQ();
-            return;
-        }
-        this.saveData();
-        this.updateHUD();
-    },
-
-    nextQ() {
-        if(this.state.hp <= 0) return this.gameOver();
-        
-        let template = this.activeDeck[Math.floor(Math.random() * this.activeDeck.length)];
-        let content = template.gen ? template.gen(false) : template.data;
-        this.currentQ = { ...content, type: template.type };
-        
-        this.renderQ(template.type, content);
-        
-        this.state.timeLeft = this.state.timerMax;
-        clearInterval(this.state.timerInterval);
-        this.renderTimer();
-        this.state.timerInterval = setInterval(() => {
-            if(!this.state.freeze) this.state.timeLeft--;
-            this.renderTimer();
-            if(this.state.timeLeft <= 0) this.check(false);
-        }, 1000);
-        
-        // Update 50/50 visual state
-        let btn50 = document.getElementById('btnFifty');
-        if(template.type === 'choice') {
-            btn50.classList.remove('unavailable');
-            btn50.style.opacity = "1";
-        } else {
-            btn50.classList.add('unavailable');
-            btn50.style.opacity = "0.3";
-        }
-    },
-    
-    renderTimer() {
-        let pct = (this.state.timeLeft / this.state.timerMax) * 100;
-        let bar = document.getElementById('timerBar');
-        bar.style.width = pct + "%";
-        if(!this.state.freeze) bar.style.background = pct<30 ? "#c0392b" : "#27ae60";
-    },
-
-    renderQ(type, content) {
-        const qText = document.getElementById('qText');
-        const inp = document.getElementById('inputContainer');
-        inp.innerHTML = "";
-        
-        let qStr = content.q.toString();
-        // Latex detection
-        if(qStr.match(/[\^\\_=<>\/]/) || qStr.includes('log')) qStr = `$$ ${qStr} $$`;
-        qText.innerHTML = qStr;
-        if(window.MathJax) MathJax.typesetPromise([qText]);
-
-        if(type === 'choice') {
-            inp.innerHTML = `<div class="choice-grid"></div>`;
-            let grid = inp.querySelector('.choice-grid');
-            let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
-            
-            opts.forEach(opt => {
-                let btn = document.createElement('button');
-                btn.className = 'ans-btn';
-                let txt = opt.toString();
-                if(txt.match(/[\^\\_=<>\/]/)) btn.innerHTML = `\\(${txt}\\)`;
-                else btn.innerText = txt;
-                
-                btn._isCorrect = (opt == content.a); // Store for 50/50
-                btn.onclick = () => this.check(opt == content.a);
-                grid.appendChild(btn);
-            });
-            if(window.MathJax) MathJax.typesetPromise([grid]);
-        } 
-        else if(type === 'match') {
-            inp.innerHTML = `<div class="match-grid"></div>`;
-            let grid = inp.querySelector('.match-grid');
-            let lefts = [], rights = [];
-            content.pairs.forEach((p, i) => {
-                lefts.push({txt:p.left, id:i});
-                rights.push({txt:p.right, id:i});
-            });
-            lefts.sort(()=>Math.random()-0.5);
-            rights.sort(()=>Math.random()-0.5);
-
-            let selected = null, solvedCount = 0;
-            const checkPair = (side, item, el) => {
-                if(el.classList.contains('solved')) return;
-                if(selected) {
-                    if(selected.side === side) {
-                        document.querySelectorAll('.match-item').forEach(x=>x.classList.remove('selected'));
-                        el.classList.add('selected'); selected = {side, item, el};
-                    } else {
-                        if(selected.item.id === item.id) {
-                            el.classList.add('solved'); selected.el.classList.add('solved');
-                            selected = null; solvedCount++;
-                            if(solvedCount >= content.pairs.length) this.check(true);
-                        } else {
-                            this.check(false);
-                        }
-                    }
-                } else {
-                    el.classList.add('selected'); selected = {side, item, el};
-                }
-            };
-            for(let i=0; i<lefts.length; i++) {
-                let l = document.createElement('div'); l.className='match-item'; l.innerText=lefts[i].txt;
-                l.onclick = ()=>checkPair('L', lefts[i], l);
-                let r = document.createElement('div'); r.className='match-item'; r.innerText=rights[i].txt;
-                r.onclick = ()=>checkPair('R', rights[i], r);
-                grid.appendChild(l); grid.appendChild(r);
-            }
-        }
-        else if(type === 'blank') {
-            let parts = content.q.split('___');
-            let html = "";
-            parts.forEach((p,i) => {
-                html += p;
-                if(i < parts.length-1) html += `<span class="blank-slot" id="slot_${i}">?</span>`;
-            });
-            qText.innerHTML = html;
-            let bank = [...content.w, content.a].sort(()=>Math.random()-0.5); 
-            let div = document.createElement('div'); div.className = 'word-bank';
-            bank.forEach(w => {
-                let b = document.createElement('div'); b.className='word-chip'; b.innerText=w;
-                b.onclick = () => { if(w == content.a) this.check(true); else this.check(false); };
-                div.appendChild(b);
-            });
-            inp.appendChild(div);
-        }
-    },
-
-    check(isCorrect) {
-        if(isCorrect) {
-            this.state.score++;
-            this.state.gold += (10 * this.state.goldMulti);
-            this.nextQ();
-        } else {
-            // Block check
-            if(Math.random()*100 < this.state.block) return; // Blocked!
-
-            this.state.hp--;
-            document.getElementById('hudLives').innerText = "❤️".repeat(this.state.hp);
-            document.body.style.background = "#500";
-            setTimeout(()=>document.body.style.background="var(--bg)", 200);
-            
-            if(this.state.hp<=0) this.gameOver();
-            else this.nextQ();
-        }
-        this.updateHUD();
-    },
-
-    gameOver() {
-        clearInterval(this.state.timerInterval);
-        this.player.gold += this.state.gold;
-        if(this.state.score > this.player.best) this.player.best = this.state.score;
-        this.saveData();
-        alert("Game Over! Score: " + this.state.score + "\nGold Earned: " + Math.floor(this.state.gold));
-        location.reload();
-    },
-
-    loadSave() {
-        let d = localStorage.getItem(SAVE_KEY);
-        if(d) {
-            let p = JSON.parse(d);
-            this.player = p.player || this.player;
-            this.settings = p.settings || this.settings;
-        }
-    },
-    saveData() {
-        localStorage.setItem(SAVE_KEY, JSON.stringify({
-            player: this.player,
-            settings: this.settings
-        }));
-    }
-};
-</script>
 </body>
 </html>

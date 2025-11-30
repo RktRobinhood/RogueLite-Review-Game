@@ -1,7 +1,12 @@
 [
   {
-    "file": "content/starter.js",
-    "subject": "IB Math AA",
-    "name": "Core Pack"
+    "id": "math_core",
+    "name": "IB Math Core",
+    "file": "content/math_core.js"
+  },
+  {
+    "id": "extras_pack",
+    "name": "Psych & TOK Demo",
+    "file": "content/extras.js"
   }
 ]
