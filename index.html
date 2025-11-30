@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Knowledge Rogue</title>
+    <title>Knowledge Rogue: v12</title>
     <link rel="stylesheet" href="style.css">
     <script>
-    window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
@@ -19,21 +22,21 @@
     <div id="loadLog" style="color:#777; font-size:0.8rem; margin-top:5px;">Initializing...</div>
 </div>
 
-<!-- SETUP -->
+<!-- SETUP SCREEN -->
 <div id="setupScreen" class="screen center hidden" style="z-index:2000; background:var(--bg);">
     <h1>SELECT LIBRARY</h1>
     <div class="setup-grid" id="setupGrid"></div>
     <button class="big-btn" onclick="Game.finishSetup()">CONFIRM</button>
 </div>
 
-<!-- SETTINGS -->
+<!-- SETTINGS OVERLAY -->
 <div id="settingsOverlay" class="screen hidden" style="background:rgba(0,0,0,0.95); z-index:2000; justify-content:center; align-items:center; display:flex; flex-direction: column;">
     <h2 style="color:white;">MODULES</h2>
     <div id="settingsArea" style="width:90%; max-width:400px;"></div>
     <button class="big-btn" onclick="Game.closeSettings()">SAVE</button>
 </div>
 
-<!-- MENU -->
+<!-- MAIN MENU -->
 <div id="menuScreen" class="screen center hidden">
     <div class="menu-header">
         <div class="menu-stats">
@@ -43,7 +46,7 @@
     </div>
     
     <div class="menu-content">
-        <!-- Avatar -->
+        <!-- Avatar Preview -->
         <div class="avatar-box">
             <div class="base-part base-legs"></div>
             <div class="base-part base-torso"></div>
@@ -57,28 +60,27 @@
 
         <!-- Tabs -->
         <div class="shop-nav">
-            <button class="nav-btn active" onclick="Game.switchTab('stats')">UPGRADE</button>
+            <button class="nav-btn active" onclick="Game.switchTab('run')">PLAY</button>
+            <button class="nav-btn" onclick="Game.switchTab('stats')">SKILLS</button>
             <button class="nav-btn" onclick="Game.switchTab('items')">ITEMS</button>
             <button class="nav-btn" onclick="Game.switchTab('gear')">GEAR</button>
         </div>
 
-        <!-- Shops -->
-        <div class="shop-container">
-            <div id="shopStats" class="shop-grid active"></div>
-            <div id="shopItems" class="shop-grid hidden"></div>
-            <div id="shopGear" class="shop-grid hidden"></div>
+        <!-- Tab: RUN -->
+        <div id="tabRun" class="shop-grid active" style="display:flex; flex-direction:column; justify-content:center; padding:10px;">
+            <button class="start-btn" onclick="Game.startRun()">START RUN</button>
+            <p style="color:#777; font-size:0.8rem; margin-top:15px;">Loaded: <span id="activeSubjectCount">0</span> Subjects</p>
+            <div class="gear-icon" onclick="Game.openSettings()" style="position:relative; margin: 20px auto; top:0; right:0;">⚙️</div>
         </div>
-        
-        <!-- Sticky Bottom Play -->
-        <div class="play-bar">
-             <button class="start-btn" onclick="Game.startRun()">START RUN</button>
-        </div>
-        
-        <div class="gear-icon" onclick="Game.openSettings()">⚙️</div>
+
+        <!-- Tab: SHOPS -->
+        <div id="shopStats" class="shop-grid hidden"></div>
+        <div id="shopItems" class="shop-grid hidden"></div>
+        <div id="shopGear" class="shop-grid hidden"></div>
     </div>
 </div>
 
-<!-- GAME -->
+<!-- GAME SCREEN -->
 <div id="gameScreen" class="screen hidden">
     <div id="gameHUD">
         <div>
@@ -91,11 +93,29 @@
             <div class="p-btn" id="btnFreeze" onclick="Game.usePowerup('freeze')">❄️<div class="p-count" id="countfreeze">0</div></div>
             <div class="p-btn" id="btnSkip" onclick="Game.usePowerup('skip')">⏭️<div class="p-count" id="countskip">0</div></div>
         </div>
+        
+        <!-- In-Game Avatar -->
+        <div class="avatar-box" style="transform: scale(0.9); margin:0; margin-top:-10px;">
+             <div class="base-part base-legs"></div>
+             <div class="base-part base-torso"></div>
+             <div class="base-part base-head" id="g-face">😐</div>
+             <div class="layer l-feet" id="g-feet"></div>
+             <div class="layer l-body" id="g-body"></div>
+             <div class="layer l-head" id="g-head"></div>
+             <div class="layer l-off" id="g-off"></div>
+             <div class="layer l-main" id="g-main"></div>
+        </div>
     </div>
     
     <div style="height:5px; background:#333;"><div id="timerBar" style="height:100%; width:100%; background:var(--green);"></div></div>
     
+    <!-- Scratchpad -->
+    <canvas id="drawLayer"></canvas>
+    <div class="gear-icon" onclick="Game.toggleScratch()" style="top:70px; right:20px; z-index:60;">✏️</div>
+
     <div id="qArea">
+        <div id="bossTag" style="display:none; color:var(--red); font-weight:bold; margin-bottom:5px;">⚠️ BOSS ⚠️</div>
+        <div id="chainStatus" style="display:none; font-size:0.8rem; color:var(--accent); font-weight:bold; margin-bottom:5px;">CHAIN 1/3</div>
         <div id="preambleBox"></div>
         <div id="qText"></div>
     </div>
@@ -105,7 +125,6 @@
 
 <!-- SCRIPTS -->
 <script src="engine.js"></script>
-<!-- Force load for local testing -->
 <script src="content/math_core.js"></script>
 <script src="content/extras.js"></script>
 
