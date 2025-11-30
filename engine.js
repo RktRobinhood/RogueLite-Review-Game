@@ -237,4 +237,196 @@ const Game = {
             chainHud.innerText = `CHAIN: ${this.run.chain.step + 1}/${this.run.chain.data.steps.length}`;
         }
         
-        this.re
+        this.renderInput('choice', stepData, true);
+    },
+
+    renderInput(type, content, keepPreamble = false) {
+        this.currentQ = { ...content, type: type };
+
+        if(!keepPreamble) {
+            const pre = document.getElementById('preambleBox');
+            if(pre) pre.style.display = 'none';
+            const ch = document.getElementById('hudChain');
+            if(ch) ch.style.display = 'none';
+            
+            if(content.preamble) {
+                 pre.style.display = 'block';
+                 pre.innerHTML = this.formatMath(content.preamble);
+            }
+        }
+
+        const qText = document.getElementById('qText');
+        qText.innerHTML = this.formatMath(content.q);
+        
+        if(window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise([document.getElementById('qArea')]).catch(e=>console.log(e));
+        }
+
+        const inp = document.getElementById('inputContainer');
+        inp.innerHTML = `<div class="choice-grid"></div>`;
+        const grid = inp.querySelector('.choice-grid');
+        
+        let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
+        
+        opts.forEach(opt => {
+            let btn = document.createElement('button');
+            btn.className = 'ans-btn';
+            btn.innerHTML = this.formatMath(opt);
+            btn.onclick = () => this.handleAnswer(opt == content.a);
+            grid.appendChild(btn);
+        });
+
+        if(window.MathJax) window.MathJax.typesetPromise([grid]);
+
+        this.run.timeLeft = this.run.timerMax;
+        clearInterval(this.run.timerInterval);
+        this.renderTimer();
+        this.run.timerInterval = setInterval(() => {
+            if(!this.run.freeze) this.run.timeLeft--;
+            this.renderTimer();
+            if(this.run.timeLeft <= 0) this.handleAnswer(false);
+        }, 1000);
+        
+        this.updateHUD();
+    },
+
+    handleAnswer(isCorrect) {
+        if(isCorrect) {
+            this.run.score++;
+            this.run.gold += Math.floor(10 * (1 + this.config.stats.greed * 0.2));
+            document.getElementById('gameHUD').style.backgroundColor = "rgba(46, 204, 113, 0.3)";
+            setTimeout(() => {
+                document.getElementById('gameHUD').style.backgroundColor = "rgba(0,0,0,0.4)";
+                this.nextQ();
+            }, 200);
+        } else {
+            this.run.hp--;
+            document.body.style.background = "#500";
+            setTimeout(()=>document.body.style.background="var(--bg)", 200);
+            
+            if(this.run.hp <= 0) this.gameOver();
+            else this.updateHUD();
+        }
+    },
+
+    updateHUD() {
+        this.safeText('hudLives', "❤️".repeat(this.run.hp));
+        this.safeText('hudGold', this.run.gold);
+        ['Fifty','Freeze','Skip'].forEach(k => {
+            let key = k.toLowerCase();
+            if(document.getElementById('count'+k)) {
+                 document.getElementById('count'+k).innerText = this.config.items[key];
+            }
+        });
+    },
+
+    renderTimer() {
+        let pct = (this.run.timeLeft / this.run.timerMax) * 100;
+        const bar = document.getElementById('timerBar');
+        if(bar) bar.style.width = pct + "%";
+    },
+
+    gameOver() {
+        clearInterval(this.run.timerInterval);
+        this.config.gold += this.run.gold;
+        if(this.run.score > this.config.best) this.config.best = this.run.score;
+        this.saveConfig();
+        
+        this.safeClassAdd('gameScreen', 'hidden');
+        this.safeClassRemove('gameOverScreen', 'hidden');
+        
+        this.safeText('endScore', this.run.score);
+        this.safeText('endGold', this.run.gold);
+        
+        const dQ = document.getElementById('deathQ');
+        const dAns = document.getElementById('deathAns');
+        if(dQ && this.currentQ) {
+            dQ.innerHTML = this.formatMath(this.currentQ.q);
+            dAns.innerHTML = this.formatMath(this.currentQ.a);
+            if(window.MathJax) MathJax.typesetPromise([dQ, dAns]);
+        }
+    },
+
+    // --- SHOPS ---
+    getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
+    
+    renderShops() {
+        const sDiv = document.getElementById('shopStats');
+        if(sDiv) {
+            sDiv.innerHTML = "";
+            ['hearts', 'timer', 'greed'].forEach(stat => {
+                let lvl = this.config.stats[stat];
+                let cost = this.getCost(lvl);
+                let btn = lvl >= 10 
+                    ? `<button class="buy-btn" disabled>MAX</button>` 
+                    : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
+                sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3><p>Level ${lvl}</p>${btn}</div>`;
+            });
+        }
+        const iDiv = document.getElementById('shopItems');
+        if(iDiv) {
+            iDiv.innerHTML = "";
+            [{k:'fifty',c:50},{k:'freeze',c:75},{k:'skip',c:100}].forEach(it => {
+                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${this.config.items[it.k]}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
+            });
+        }
+    },
+
+    buyUpgrade(stat) {
+        let lvl = this.config.stats[stat];
+        let cost = this.getCost(lvl);
+        if(this.config.gold >= cost && lvl < 10) {
+            this.config.gold -= cost; this.config.stats[stat]++; 
+            this.saveConfig(); this.renderShops(); this.updateMenuUI();
+        }
+    },
+    buyItem(key, cost) {
+        if(this.config.gold >= cost) {
+            this.config.gold -= cost; this.config.items[key]++; 
+            this.saveConfig(); this.renderShops(); this.updateMenuUI();
+        }
+    },
+
+    switchTab(tab) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        ['tabRun','shopStats','shopItems','shopGear'].forEach(id => {
+             const el = document.getElementById(id);
+             if(el) el.style.display = 'none';
+        });
+        
+        if(tab === 'run') document.getElementById('tabRun').style.display = 'flex';
+        else {
+            const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
+            if(el) el.style.display = 'grid';
+        }
+    },
+
+    // --- SCRATCHPAD ---
+    initScratchpad() {
+        let canvas = document.getElementById('drawLayer');
+        if(!canvas) {
+             canvas = document.createElement('canvas');
+             canvas.id = 'drawLayer';
+             canvas.style.zIndex = "5"; 
+             canvas.style.pointerEvents = "none"; 
+             document.body.appendChild(canvas);
+        }
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        this.scratch.ctx = canvas.getContext('2d');
+        
+        // DRAWING LOGIC
+        const start = (e) => {
+            if(!this.scratch.active) return;
+            this.scratch.isDrawing = true;
+            this.scratch.ctx.beginPath();
+            this.scratch.ctx.moveTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+        };
+        const move = (e) => {
+            if(!this.scratch.active || !this.scratch.isDrawing) return;
+            e.preventDefault();
+            this.scratch.ctx.lineTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            this.scratch.ctx.strokeStyle = "yellow";
+            this.scratch.ctx.lineWidth = 3;
+            this.scratch.ctx.stroke();
+   
