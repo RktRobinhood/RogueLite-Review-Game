@@ -1,7 +1,3 @@
 [
-  {
-    "id": "math_exam_25",
-    "name": "IB Math AA: May 2025",
-    "file": "content/math_exam_2025.js"
-  }
+  { "id": "math_aa_sl_may25", "name": "IB Math AA: May 2025", "file": "content/math_exam_2025.js" }
 ]

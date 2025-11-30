@@ -1,162 +1,87 @@
 Game.addPack({
     id: "math_aa_sl_may25",
-    name: "IB Math AA: May 2025 Exam",
+    name: "IB Math AA: May 2025",
     questions: [
-        // --- TOPIC 1: NUMBER & ALGEBRA ---
+        // --- TOPIC 1: ALGEBRA ---
         {
-            type: "choice", subject: "Math AA", topic: "1.2 Sequences",
-            gen: (h) => {
-                // Arithmetic Sequence
+            type: "choice", subject: "Math AA", topic: "Algebra",
+            gen: () => {
                 let u1 = Math.floor(Math.random()*10)+2;
                 let d = Math.floor(Math.random()*5)+2;
-                let n = 10;
-                return {
-                    q: `In an arithmetic sequence, $u_1 = ${u1}$ and $d = ${d}$. Find $u_{${n}}$.`,
-                    a: u1 + (n-1)*d,
-                    w: [u1 + n*d, u1 + (n+1)*d, u1*Math.pow(d, n-1)]
+                return { 
+                    q: `Arithmetic Seq: $u_1=${u1}, d=${d}$. Find $u_{10}$.`, 
+                    a: u1 + 9*d, 
+                    w: [u1+10*d, u1*Math.pow(d,9), u1+8*d] 
                 };
             }
         },
         {
-            type: "choice", subject: "Math AA", topic: "1.3 Logs",
-            gen: (h) => {
-                let b = Math.floor(Math.random()*3)+2;
-                let p = Math.floor(Math.random()*3)+2;
+            type: "choice", subject: "Math AA", topic: "Algebra",
+            gen: () => {
+                let n = Math.floor(Math.random()*3)+3; 
+                // Binomial coeff of x^2 in (x+2)^n
+                let ans = (n*(n-1)/2) * 4;
                 return {
-                    q: `Evaluate $\\log_${b} (${Math.pow(b, p)})$.`,
-                    a: p,
-                    w: [1, Math.pow(b, p), 0]
-                };
-            }
-        },
-        {
-            type: "choice", subject: "Math AA", topic: "1.4 Financial",
-            gen: (h) => {
-                // Simple Binomial Expansion Coeff
-                let n = 4;
-                return {
-                    q: `Find the coefficient of the $x^2$ term in the expansion of $(x+2)^${n}$.`,
-                    a: 24, // 4C2 * 2^2 = 6 * 4
-                    w: [6, 12, 16]
+                    q: `Find the coeff of $x^{${n-2}}$ in $(x+2)^${n}$.`,
+                    a: ans,
+                    w: [ans*2, ans/2, ans+4]
                 };
             }
         },
 
         // --- TOPIC 2: FUNCTIONS ---
         {
-            type: "choice", subject: "Math AA", topic: "2.2 Functions",
-            gen: (h) => {
-                let c = Math.floor(Math.random()*5)+1;
+            type: "choice", subject: "Math AA", topic: "Functions",
+            gen: () => {
+                let h = Math.floor(Math.random()*5)+1;
+                let k = Math.floor(Math.random()*5)+1;
                 return {
-                    q: `Find the inverse function of $f(x) = 2x + ${c}$.`,
-                    a: `$\\frac{x-${c}}{2}$`,
-                    w: [`$\\frac{x+${c}}{2}$`, `$2x-${c}$`, `$\\frac{1}{2x+${c}}$`]
-                };
-            }
-        },
-        {
-            type: "choice", subject: "Math AA", topic: "2.6 Quadratics",
-            gen: (h) => {
-                let k = Math.floor(Math.random()*5)+2;
-                return {
-                    q: `Find the coordinates of the vertex of $y = (x-${k})^2 + 3$.`,
-                    a: `(${k}, 3)`,
-                    w: [`(-${k}, 3)`, `(3, ${k})`, `(${k}, -3)`]
-                };
-            }
-        },
-        
-        // --- TOPIC 3: TRIGONOMETRY ---
-        {
-            type: "choice", subject: "Math AA", topic: "3.2 Unit Circle",
-            gen: (h) => {
-                return {
-                    q: `Find the exact value of $\\cos(120^\\circ)$.`,
-                    a: `$-\\frac{1}{2}$`,
-                    w: [`$\\frac{1}{2}$`, `$-\\frac{\\sqrt{3}}{2}$`, `$\\frac{\\sqrt{3}}{2}$`]
-                };
-            }
-        },
-        {
-            type: "choice", subject: "Math AA", topic: "3.3 Triangles",
-            gen: (h) => {
-                return {
-                    q: `In $\\triangle ABC$, $AB=5$, $BC=6$, $\\angle B = 90^\\circ$. Find $AC$.`,
-                    a: `$\\sqrt{61}$`,
-                    w: [`11`, `$\\sqrt{11}$`, `30`]
-                };
-            }
-        },
-
-        // --- TOPIC 4: STATISTICS ---
-        {
-            type: "choice", subject: "Math AA", topic: "4.5 Probability",
-            gen: (h) => {
-                return {
-                    q: `If $P(A) = 0.4$, $P(B) = 0.5$ and events are independent, find $P(A \\cap B)$.`,
-                    a: 0.2,
-                    w: [0.9, 0.1, 0.5]
-                };
-            }
-        },
-        {
-            type: "choice", subject: "Math AA", topic: "4.7 Distributions",
-            gen: (h) => {
-                return {
-                    q: `Given $X \\sim B(10, 0.5)$, find the expected value $E(X)$.`,
-                    a: 5,
-                    w: [0.5, 10, 2.5]
+                    q: `Find the vertex of $y = 2(x-${h})^2 + ${k}$.`,
+                    a: `(${h}, ${k})`,
+                    w: [`(-${h}, ${k})`, `(${k}, ${h})`, `(${h}, -${k})`]
                 };
             }
         },
 
         // --- TOPIC 5: CALCULUS ---
         {
-            type: "choice", subject: "Math AA", topic: "5.3 Derivative",
-            gen: (h) => {
-                let p = Math.floor(Math.random()*4)+2;
+            type: "choice", subject: "Math AA", topic: "Calculus",
+            gen: () => {
+                let p = Math.floor(Math.random()*3)+2;
                 return {
-                    q: `Differentiate $f(x) = x^${p}$.`,
-                    a: `$${p}x^${p-1}$`,
-                    w: [`$x^${p-1}$`, `$\\frac{x^${p+1}}{${p+1}}$`, `$${p}x$`]
-                };
-            }
-        },
-        {
-            type: "choice", subject: "Math AA", topic: "5.5 Integration",
-            gen: (h) => {
-                return {
-                    q: `Find $\\int \\cos x \\, dx$.`,
-                    a: `$\\sin x + C$`,
-                    w: [`$-\\sin x + C$`, `$\\cos x + C$`, `$-\\cos x + C$`]
+                    q: `$\\frac{d}{dx} \\ln(x^${p})$`,
+                    a: `$\\frac{${p}}{x}$`,
+                    w: [`$\\frac{1}{x^${p}}$`, `$x^${p-1}$`, `$\\frac{1}{${p}x}$`]
                 };
             }
         },
 
-        // --- CHAIN QUESTIONS (DUNGEONS) ---
-        {
-            type: "chain",
-            subject: "Math AA",
-            topic: "Functions",
-            data: {
-                preamble: "Consider the function $f(x) = x^2 - 6x + 5$.",
-                steps: [
-                    { q: "Find the $y$-intercept.", a: 5, w: [-6, 1, 0] },
-                    { q: "Factorize the expression.", a: "$(x-5)(x-1)$", w: ["$(x+5)(x+1)$", "$(x-3)(x-2)$", "$(x-6)(x+1)$"] },
-                    { q: "Find the x-coordinate of the vertex.", a: 3, w: [-3, 6, 2.5] }
-                ]
-            }
-        },
+        // --- CHAIN: KINEMATICS ---
         {
             type: "chain",
             subject: "Math AA",
             topic: "Calculus",
             data: {
-                preamble: "A particle moves with velocity $v(t) = 3t^2 - 2t$.",
+                preamble: "A particle moves with velocity $v(t) = 3t^2 - 2t$ m/s.",
                 steps: [
-                    { q: "Find the acceleration function $a(t)$.", a: "$6t - 2$", w: ["$t^3 - t^2$", "$3t - 2$", "$6t$"] },
-                    { q: "Find the initial velocity ($t=0$).", a: 0, w: [-2, 3, 1] },
-                    { q: "Find the displacement $s(t)$ if $s(0)=5$.", a: "$t^3 - t^2 + 5$", w: ["$t^3 - t^2$", "$6t - 2 + C$", "$t^3 - t^2 + C$"] }
+                    { q: "Find the initial acceleration.", a: "-2", w: ["0", "3", "-1"] },
+                    { q: "Find the velocity at $t=2$.", a: "8", w: ["6", "10", "4"] },
+                    { q: "Find the displacement at $t=1$, given $s(0)=0$.", a: "0", w: ["1", "2", "0.5"] } // s = t^3 - t^2
+                ]
+            }
+        },
+
+        // --- CHAIN: PROBABILITY ---
+        {
+            type: "chain",
+            subject: "Math AA",
+            topic: "Statistics",
+            data: {
+                preamble: "Events A and B are independent. $P(A)=0.4, P(B)=0.5$.",
+                steps: [
+                    { q: "Find $P(A \\cap B)$.", a: 0.2, w: [0.9, 0.1, 0.5] },
+                    { q: "Find $P(A \\cup B)$.", a: 0.7, w: [0.9, 0.2, 0.8] },
+                    { q: "Find $P(A|B)$.", a: 0.4, w: [0.5, 0.2, 0.1] }
                 ]
             }
         }
