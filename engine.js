@@ -14,40 +14,53 @@ const Game = {
     
     // --- INIT ---
     async init() {
-        console.log("Engine: Booting...");
+        this.log("Engine: Booting...");
         this.loadConfig();
-        if(!this.player) this.player = { face: "😐", gear: {head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] }; // Legacy fix
+        if(!this.player) this.player = { face: "😐", gear: {head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] }; 
         
         this.initScratchpad();
         
-        // 1. Load Manifest (for settings names)
+        // 1. Load Manifest
         await this.fetchManifest();
 
-        // 2. Check Library (Loaded via <script> tags in index.html)
-        // We do NOT wipe this.library here, we just check it.
+        // 2. Check Content
+        // The <script> tags in index.html execute BEFORE window.onload
+        // So Game.addPack should have already run.
         if(this.library.length === 0) {
-            console.warn("Engine: No external content found. Injecting Emergency Backup.");
+            this.log("Engine: Library empty. Injecting Emergency Backup.");
             this.injectEmergencyQuestions();
         } else {
-            console.log(`Engine: Content Ready. ${this.library.length} templates loaded.`);
+            this.log(`Engine: Content Ready. ${this.library.length} templates loaded.`);
         }
 
-        this.safeClassRemove('loader', 'hidden');
+        // 3. HIDE LOADER (The Fix)
+        // We must ADD the class 'hidden' to make it disappear
+        this.log("Engine: Hiding Loader...");
+        this.safeClassAdd('loader', 'hidden');
 
-        // 3. Route to Menu or Setup
+        // 4. Route to Menu or Setup
         if(!this.config.activeFiles || this.config.activeFiles.length === 0) {
+            this.log("Engine: No active subjects. Showing Setup.");
             this.showSetup();
         } else {
+            this.log("Engine: Config found. Showing Menu.");
             this.showMenu();
         }
+    },
+
+    // Logging Helper
+    log(msg) {
+        console.log(msg);
+        // Optional: print to the loading screen itself so you can see it hanging
+        const logEl = document.getElementById('loadLog');
+        if(logEl) logEl.innerText = msg;
     },
 
     // External files call this to register
     addPack(pack) {
         if(!pack.questions) return;
         pack.questions.forEach(q => {
-            q._src = pack.id; // Tag source for filtering
-            // Generate a unique ID for the Deck system
+            q._src = pack.id; 
             q._uid = pack.id + "_" + Math.random().toString(36).substr(2,9);
             this.library.push(q);
         });
@@ -57,12 +70,12 @@ const Game = {
     // --- CORE UTILS ---
     loadConfig() {
         try {
-            const d = localStorage.getItem('rogueConfig_v14');
+            const d = localStorage.getItem('rogueConfig_v15');
             if(d) this.config = JSON.parse(d);
         } catch(e) { console.error("Save corrupt", e); }
     },
     saveConfig() {
-        localStorage.setItem('rogueConfig_v14', JSON.stringify(this.config));
+        localStorage.setItem('rogueConfig_v15', JSON.stringify(this.config));
         this.updateMenuUI();
     },
 
@@ -72,7 +85,7 @@ const Game = {
             const resp = await fetch('library.json');
             if(resp.ok) this.manifest = await resp.json();
         } catch(e) {
-            console.log("Engine: Local mode (No fetch). Using Script Tags.");
+            this.log("Engine: Local mode (No fetch). Using Script Tags.");
             // Fallback for menu naming if JSON fails
             this.manifest = [
                 { id: 'math_may25', name: 'IB Math AA: May 2025 Exam' }
@@ -109,7 +122,6 @@ const Game = {
         if(!grid) return;
         grid.innerHTML = "";
         
-        // Use manifest for nice names, or infer from library if manifest failed
         let sources = this.manifest.length > 0 
             ? this.manifest 
             : [...new Set(this.library.map(q => q._src))].map(s => ({id:s, name:s.toUpperCase()}));
@@ -146,20 +158,57 @@ const Game = {
         if(this.config.activeFiles) this.safeText('activeSubjectCount', this.config.activeFiles.length);
     },
 
+    // --- SHOPS (Stats, Items, Gear) ---
+    // Simplified for stability - restores the HTML generation
+    renderShops() {
+        // Stats
+        const sDiv = document.getElementById('shopStats');
+        if(sDiv) {
+            sDiv.innerHTML = "";
+            ['hearts', 'timer', 'greed'].forEach(stat => {
+                let lvl = this.config.stats[stat];
+                let cost = Math.floor(100 * Math.pow(1.5, lvl));
+                let btn = lvl >= 10 
+                    ? `<button class="buy-btn" disabled>MAX</button>` 
+                    : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
+                sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3><p>Level ${lvl}</p>${btn}</div>`;
+            });
+        }
+    },
+
+    buyUpgrade(stat) {
+        let lvl = this.config.stats[stat];
+        let cost = Math.floor(100 * Math.pow(1.5, lvl));
+        if(this.config.gold >= cost && lvl < 10) {
+            this.config.gold -= cost;
+            this.config.stats[stat]++;
+            this.saveConfig();
+            this.renderShops();
+            this.updateMenuUI();
+        }
+    },
+
+    switchTab(tab) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        ['tabRun','shopStats','shopItems','shopGear'].forEach(id => {
+             const el = document.getElementById(id);
+             if(el) el.style.display = 'none';
+        });
+        
+        if(tab === 'run') document.getElementById('tabRun').style.display = 'flex';
+        else {
+            const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
+            if(el) el.style.display = 'grid';
+        }
+    },
+
     // --- GAMEPLAY LOOP ---
     startRun() {
-        // Filter Questions
         let deck = this.library.filter(q => this.config.activeFiles.includes(q._src));
+        if(deck.length === 0) deck = this.library; // Fallback
         
-        // Filtering fallback
-        if(deck.length === 0) {
-            console.warn("No questions matched selection. Loading ALL.");
-            deck = this.library;
-        }
-        
-        if(deck.length === 0) return alert("Critical Error: No questions in memory.");
+        if(deck.length === 0) return alert("Critical Error: No questions.");
 
-        // Init Run State
         let hpBonus = this.config.stats.hearts; 
         let timeBonus = this.config.stats.timer * 5;
 
@@ -167,8 +216,8 @@ const Game = {
             hp: 3 + Math.floor(hpBonus/2),
             score: 0,
             gold: 0,
-            deck: deck, // The master list
-            playDeck: [], // The current shuffle
+            deck: deck,
+            playDeck: [],
             timerMax: 30 + timeBonus,
             timeLeft: 30,
             freeze: false,
@@ -184,42 +233,35 @@ const Game = {
     nextQ() {
         if(this.run.hp <= 0) return this.gameOver();
 
-        // 1. Handle Chains
         if(this.run.chain) {
             this.run.chain.step++;
             if(this.run.chain.step >= this.run.chain.data.steps.length) {
-                this.run.chain = null; // Chain complete
+                this.run.chain = null; 
             } else {
                 this.renderChainStep();
                 return;
             }
         }
 
-        // 2. Refill Deck if empty
         if(this.run.playDeck.length === 0) {
-            // Shallow copy and shuffle
             this.run.playDeck = [...this.run.deck].sort(() => Math.random() - 0.5);
         }
 
-        // 3. Pick Question
         let template = this.run.playDeck.pop();
 
-        // 4. Chain or Standard?
         if(template.type === 'chain') {
             this.run.chain = { data: template.data, step: 0 };
             this.renderChainStep();
         } else {
-            // Generate Dynamic Math
             let content;
             try {
-                // Pass true if score % 10 == 0 (Boss Mode scaling)
                 let isBoss = (this.run.score > 0 && (this.run.score+1) % 10 === 0);
                 content = template.gen ? template.gen(isBoss) : template.data;
             } catch(e) {
                 console.error("Gen Error", e);
-                return this.nextQ(); // Skip broken question
+                return this.nextQ();
             }
-            this.renderInput('choice', content); // Default to choice for now
+            this.renderInput('choice', content);
         }
     },
 
@@ -236,7 +278,6 @@ const Game = {
     renderInput(type, content, keepPreamble = false) {
         this.currentQ = { ...content, type: type };
 
-        // UI Cleanup
         if(!keepPreamble) {
             const pre = document.getElementById('preambleBox');
             if(pre) pre.style.display = 'none';
@@ -249,7 +290,6 @@ const Game = {
         const qText = document.getElementById('qText');
         qText.innerHTML = this.formatMath(content.q);
         
-        // Force MathJax Reflow (Fixes the invisible text bug)
         if(window.MathJax && window.MathJax.typesetPromise) {
             window.MathJax.typesetPromise([document.getElementById('qArea')]).catch(e=>console.log(e));
         }
@@ -270,146 +310,8 @@ const Game = {
 
         if(window.MathJax) window.MathJax.typesetPromise([grid]);
 
-        // Start Timer
+        // Timer
         this.run.timeLeft = this.run.timerMax;
         clearInterval(this.run.timerInterval);
         this.renderTimer();
-        this.run.timerInterval = setInterval(() => {
-            if(!this.run.freeze) this.run.timeLeft--;
-            this.renderTimer();
-            if(this.run.timeLeft <= 0) this.handleAnswer(false);
-        }, 1000);
-        
-        this.updateHUD();
-    },
-
-    handleAnswer(isCorrect) {
-        if(isCorrect) {
-            this.run.score++;
-            this.run.gold += Math.floor(10 * (1 + this.config.stats.greed * 0.2));
-            // Visual Green Flash
-            document.getElementById('gameHUD').style.backgroundColor = "rgba(46, 204, 113, 0.3)";
-            setTimeout(() => {
-                document.getElementById('gameHUD').style.backgroundColor = "rgba(0,0,0,0.4)";
-                this.nextQ();
-            }, 200);
-        } else {
-            this.run.hp--;
-            // Visual Red Flash
-            document.body.style.background = "#500";
-            setTimeout(()=>document.body.style.background="var(--bg)", 200);
-            
-            if(this.run.hp <= 0) this.gameOver();
-            else this.updateHUD();
-        }
-    },
-
-    updateHUD() {
-        this.safeText('hudLives', "❤️".repeat(this.run.hp));
-        this.safeText('hudGold', this.run.gold);
-        ['Fifty','Freeze','Skip'].forEach(k => {
-            let key = k.toLowerCase();
-            // Check buttons exist before updating
-            if(document.getElementById('count'+k)) {
-                 document.getElementById('count'+k).innerText = this.config.items[key];
-            }
-        });
-    },
-
-    renderTimer() {
-        let pct = (this.run.timeLeft / this.run.timerMax) * 100;
-        const bar = document.getElementById('timerBar');
-        if(bar) bar.style.width = pct + "%";
-    },
-
-    gameOver() {
-        clearInterval(this.run.timerInterval);
-        this.config.gold += this.run.gold;
-        if(this.run.score > this.config.best) this.config.best = this.run.score;
-        this.saveConfig();
-        
-        this.safeClassAdd('gameScreen', 'hidden');
-        this.safeClassRemove('gameOverScreen', 'hidden');
-        
-        this.safeText('endScore', this.run.score);
-        this.safeText('endGold', this.run.gold);
-        
-        // Recap
-        const dQ = document.getElementById('deathQ');
-        const dAns = document.getElementById('deathAns');
-        if(dQ && this.currentQ) {
-            dQ.innerHTML = this.formatMath(this.currentQ.q);
-            dAns.innerHTML = this.formatMath(this.currentQ.a);
-            if(window.MathJax) MathJax.typesetPromise([dQ, dAns]);
-        }
-    },
-
-    // --- UTILS ---
-    formatMath(str) {
-        if(!str) return "";
-        let s = str.toString();
-        if(s.match(/[\\^_{}]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) return `$$ ${s} $$`;
-        return s;
-    },
-    
-    // --- SHOPS (Simplified for brevity) ---
-    getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
-    
-    renderShops() {
-        // Stats
-        const sDiv = document.getElementById('shopStats');
-        if(sDiv) {
-            sDiv.innerHTML = "";
-            ['hearts', 'timer', 'greed'].forEach(stat => {
-                let lvl = this.config.stats[stat];
-                let cost = this.getCost(lvl);
-                let btn = lvl >= 10 ? `<button class="buy-btn" disabled>MAX</button>` : `<button class="buy-btn" onclick="Game.buyUpgrade('${stat}')">${cost}g</button>`;
-                sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3><p>Level ${lvl}</p>${btn}</div>`;
-            });
-        }
-        // Items
-        const iDiv = document.getElementById('shopItems');
-        if(iDiv) {
-            iDiv.innerHTML = "";
-            [{k:'fifty',c:50},{k:'freeze',c:75},{k:'skip',c:100}].forEach(it => {
-                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${this.config.items[it.k]}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
-            });
-        }
-    },
-
-    buyUpgrade(stat) {
-        let cost = this.getCost(this.config.stats[stat]);
-        if(this.config.gold >= cost && this.config.stats[stat] < 10) {
-            this.config.gold -= cost; this.config.stats[stat]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
-        }
-    },
-    buyItem(key, cost) {
-        if(this.config.gold >= cost) {
-            this.config.gold -= cost; this.config.items[key]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
-        }
-    },
-
-    switchTab(tab) {
-        ['tabRun','shopStats','shopItems','shopGear'].forEach(id => {
-             const el = document.getElementById(id);
-             if(el) el.style.display = 'none';
-        });
-        if(tab==='run') document.getElementById('tabRun').style.display = 'flex';
-        else document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1)).style.display = 'grid';
-        
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        // Simple active toggle (index based or id based)
-    },
-
-    // Scratchpad
-    initScratchpad() {
-        // ... (Same as previous version) ...
-    },
-    toggleScratch() {
-        // ... (Same as previous version) ...
-    }
-};
-
-window.onload = () => Game.init();
+        this.run.timerInte
