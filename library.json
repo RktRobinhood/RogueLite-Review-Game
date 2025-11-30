@@ -1,12 +1,7 @@
 [
   {
-    "id": "math_core",
-    "name": "IB Math Core",
-    "file": "content/math_core.js"
-  },
-  {
-    "id": "extras_pack",
-    "name": "Psych & TOK Demo",
-    "file": "content/extras.js"
+    "id": "math_exam_25",
+    "name": "IB Math AA: May 2025",
+    "file": "content/math_exam_2025.js"
   }
 ]
