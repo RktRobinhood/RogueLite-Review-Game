@@ -1,5 +1,5 @@
 const Game = {
-    // State
+    // --- STATE ---
     manifest: [],
     library: [], 
     config: {
@@ -9,23 +9,27 @@ const Game = {
         gold: 1000,
         best: 0
     },
+    player: { face:null, gear:{head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] },
     run: { active:false, chain:null },
     scratch: { active:false, ctx:null, isDrawing:false },
-    
+
     // --- INIT ---
     async init() {
         console.log("Engine: Booting...");
         this.loadConfig();
         
-        // Legacy save fix
-        if(!this.player) this.player = { face: "😐", gear: {head:0,body:0,main:0,off:0,feet:0}, unlockedGear:[0] }; 
+        // Default Face
+        if(!this.player.face) this.player.face = "😐";
         
         this.initScratchpad();
         
         // 1. Load Manifest
         await this.fetchManifest();
 
-        // 2. Check Content
+        // 2. Check Content (Loaded via script tags in index.html)
+        // Wait a tick for scripts to register
+        await new Promise(r => setTimeout(r, 200));
+
         if(this.library.length === 0) {
             console.warn("Engine: Library empty. Injecting Emergency Backup.");
             this.injectEmergencyQuestions();
@@ -33,24 +37,22 @@ const Game = {
             console.log(`Engine: Content Ready. ${this.library.length} templates loaded.`);
         }
 
-        // 3. FORCE HIDE LOADER (The Fix)
+        // 3. Hide Loader
         const loader = document.getElementById('loader');
         if(loader) {
             loader.style.opacity = 0;
             setTimeout(() => { loader.style.display = 'none'; }, 500);
         }
 
-        // 4. Route to Menu or Setup
+        // 4. Navigation
         if(!this.config.activeFiles || this.config.activeFiles.length === 0) {
-            console.log("Engine: First run. Showing Setup.");
             this.showSetup();
         } else {
-            console.log("Engine: Returning user. Showing Menu.");
             this.showMenu();
         }
     },
 
-    // Register content
+    // Content Registration
     addPack(pack) {
         if(!pack.questions) return;
         pack.questions.forEach(q => {
@@ -61,15 +63,22 @@ const Game = {
         console.log(`Engine: Registered ${pack.name} (${pack.questions.length} Qs)`);
     },
 
-    // --- CORE UTILS ---
+    // --- DATA & SAVES ---
     loadConfig() {
         try {
             const d = localStorage.getItem('rogueConfig_v15');
-            if(d) this.config = JSON.parse(d);
+            if(d) {
+                const data = JSON.parse(d);
+                this.config = data.config || this.config;
+                this.player = data.player || this.player;
+            }
         } catch(e) { console.error("Save corrupt", e); }
     },
     saveConfig() {
-        localStorage.setItem('rogueConfig_v15', JSON.stringify(this.config));
+        localStorage.setItem('rogueConfig_v15', JSON.stringify({
+            config: this.config,
+            player: this.player
+        }));
         this.updateMenuUI();
     },
 
@@ -78,11 +87,11 @@ const Game = {
         try {
             const resp = await fetch('library.json');
             if(resp.ok) this.manifest = await resp.json();
+            else throw new Error("404");
         } catch(e) {
-            console.log("Engine: Local mode (No fetch). Using Script Tags.");
-            // Fallback for menu naming if JSON fails
+            console.log("Engine: Local mode. Using fallback manifest.");
             this.manifest = [
-                { id: 'math_may25', name: 'IB Math AA: May 2025 Exam' }
+                { id: 'math_aa_sl_may25', name: 'IB Math AA: May 2025' }
             ];
         }
         this.updateLoader(60);
@@ -99,14 +108,21 @@ const Game = {
         this.config.activeFiles = ['emergency'];
     },
 
+    // --- HELPERS ---
     updateLoader(pct) { 
         const bar = document.getElementById('loaderBar');
         if(bar) bar.style.width = pct+"%"; 
     },
-
     safeClassRemove(id, cls) { const el = document.getElementById(id); if(el) el.classList.remove(cls); },
     safeClassAdd(id, cls) { const el = document.getElementById(id); if(el) el.classList.add(cls); },
     safeText(id, txt) { const el = document.getElementById(id); if(el) el.innerText = txt; },
+    
+    formatMath(str) {
+        if(!str) return "";
+        let s = str.toString();
+        if(s.match(/[\\^_{}]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) return `$$ ${s} $$`;
+        return s;
+    },
 
     // --- MENU & SETUP ---
     showSetup() {
@@ -116,6 +132,7 @@ const Game = {
         if(!grid) return;
         grid.innerHTML = "";
         
+        // Get unique sources
         let sources = this.manifest.length > 0 
             ? this.manifest 
             : [...new Set(this.library.map(q => q._src))].map(s => ({id:s, name:s.toUpperCase()}));
@@ -150,207 +167,23 @@ const Game = {
         this.safeText('menuGold', this.config.gold);
         this.safeText('menuBest', this.config.best);
         if(this.config.activeFiles) this.safeText('activeSubjectCount', this.config.activeFiles.length);
+        this.renderAvatar('p');
     },
 
-    // --- GAMEPLAY LOOP ---
-    startRun() {
-        let deck = this.library.filter(q => this.config.activeFiles.includes(q._src));
-        
-        if(deck.length === 0) {
-            console.warn("No questions matched selection. Loading ALL.");
-            deck = this.library;
-        }
-        
-        if(deck.length === 0) return alert("Critical Error: No questions in memory.");
-
-        let hpBonus = this.config.stats.hearts; 
-        let timeBonus = this.config.stats.timer * 5;
-
-        this.run = {
-            hp: 3 + Math.floor(hpBonus/2),
-            score: 0,
-            gold: 0,
-            deck: deck, 
-            playDeck: [], 
-            timerMax: 30 + timeBonus,
-            timeLeft: 30,
-            freeze: false,
-            chain: null
-        };
-
-        this.safeClassAdd('menuScreen', 'hidden');
-        this.safeClassRemove('gameScreen', 'hidden');
-        this.updateHUD();
-        this.nextQ();
-    },
-
-    nextQ() {
-        if(this.run.hp <= 0) return this.gameOver();
-
-        // 1. Handle Chains
-        if(this.run.chain) {
-            this.run.chain.step++;
-            if(this.run.chain.step >= this.run.chain.data.steps.length) {
-                this.run.chain = null; 
-            } else {
-                this.renderChainStep();
-                return;
-            }
-        }
-
-        // 2. Refill Deck
-        if(this.run.playDeck.length === 0) {
-            this.run.playDeck = [...this.run.deck].sort(() => Math.random() - 0.5);
-        }
-
-        // 3. Pick
-        let template = this.run.playDeck.pop();
-
-        // 4. Render
-        if(template.type === 'chain') {
-            this.run.chain = { data: template.data, step: 0 };
-            this.renderChainStep();
-        } else {
-            let content;
-            try {
-                let isBoss = (this.run.score > 0 && (this.run.score+1) % 10 === 0);
-                content = template.gen ? template.gen(isBoss) : template.data;
-            } catch(e) {
-                console.error("Gen Error", e);
-                return this.nextQ();
-            }
-            this.renderInput('choice', content);
-        }
-    },
-
-    renderChainStep() {
-        const stepData = this.run.chain.data.steps[this.run.chain.step];
-        const preBox = document.getElementById('preambleBox');
-        if(preBox) {
-            preBox.style.display = 'block';
-            preBox.innerHTML = this.formatMath(this.run.chain.data.preamble);
-        }
-        // Update Chain HUD indicator
-        const chainHud = document.getElementById('hudChain');
-        if(chainHud) {
-            chainHud.style.display = 'block';
-            chainHud.innerText = `CHAIN: ${this.run.chain.step + 1}/${this.run.chain.data.steps.length}`;
-        }
-        
-        this.renderInput('choice', stepData, true);
-    },
-
-    renderInput(type, content, keepPreamble = false) {
-        this.currentQ = { ...content, type: type };
-
-        if(!keepPreamble) {
-            const pre = document.getElementById('preambleBox');
-            if(pre) pre.style.display = 'none';
-            const ch = document.getElementById('hudChain');
-            if(ch) ch.style.display = 'none';
-            
-            if(content.preamble) {
-                 pre.style.display = 'block';
-                 pre.innerHTML = this.formatMath(content.preamble);
-            }
-        }
-
-        const qText = document.getElementById('qText');
-        qText.innerHTML = this.formatMath(content.q);
-        
-        if(window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise([document.getElementById('qArea')]).catch(e=>console.log(e));
-        }
-
-        const inp = document.getElementById('inputContainer');
-        inp.innerHTML = `<div class="choice-grid"></div>`;
-        const grid = inp.querySelector('.choice-grid');
-        
-        let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
-        
-        opts.forEach(opt => {
-            let btn = document.createElement('button');
-            btn.className = 'ans-btn';
-            btn.innerHTML = this.formatMath(opt);
-            btn.onclick = () => this.handleAnswer(opt == content.a);
-            grid.appendChild(btn);
+    renderAvatar(prefix) {
+        this.safeText(prefix+'-face', this.player.face);
+        const slots = ['head','body','main','off','feet'];
+        slots.forEach(s => {
+            let g = gearConfig.find(x => x.id === this.player.gear[s]);
+            this.safeText(`${prefix}-${s}`, g ? g.icon : "");
         });
-
-        if(window.MathJax) window.MathJax.typesetPromise([grid]);
-
-        this.run.timeLeft = this.run.timerMax;
-        clearInterval(this.run.timerInterval);
-        this.renderTimer();
-        this.run.timerInterval = setInterval(() => {
-            if(!this.run.freeze) this.run.timeLeft--;
-            this.renderTimer();
-            if(this.run.timeLeft <= 0) this.handleAnswer(false);
-        }, 1000);
-        
-        this.updateHUD();
-    },
-
-    handleAnswer(isCorrect) {
-        if(isCorrect) {
-            this.run.score++;
-            this.run.gold += Math.floor(10 * (1 + this.config.stats.greed * 0.2));
-            document.getElementById('gameHUD').style.backgroundColor = "rgba(46, 204, 113, 0.3)";
-            setTimeout(() => {
-                document.getElementById('gameHUD').style.backgroundColor = "rgba(0,0,0,0.4)";
-                this.nextQ();
-            }, 200);
-        } else {
-            this.run.hp--;
-            document.body.style.background = "#500";
-            setTimeout(()=>document.body.style.background="var(--bg)", 200);
-            
-            if(this.run.hp <= 0) this.gameOver();
-            else this.updateHUD();
-        }
-    },
-
-    updateHUD() {
-        this.safeText('hudLives', "❤️".repeat(this.run.hp));
-        this.safeText('hudGold', this.run.gold);
-        ['Fifty','Freeze','Skip'].forEach(k => {
-            let key = k.toLowerCase();
-            if(document.getElementById('count'+k)) {
-                 document.getElementById('count'+k).innerText = this.config.items[key];
-            }
-        });
-    },
-
-    renderTimer() {
-        let pct = (this.run.timeLeft / this.run.timerMax) * 100;
-        const bar = document.getElementById('timerBar');
-        if(bar) bar.style.width = pct + "%";
-    },
-
-    gameOver() {
-        clearInterval(this.run.timerInterval);
-        this.config.gold += this.run.gold;
-        if(this.run.score > this.config.best) this.config.best = this.run.score;
-        this.saveConfig();
-        
-        this.safeClassAdd('gameScreen', 'hidden');
-        this.safeClassRemove('gameOverScreen', 'hidden');
-        
-        this.safeText('endScore', this.run.score);
-        this.safeText('endGold', this.run.gold);
-        
-        const dQ = document.getElementById('deathQ');
-        const dAns = document.getElementById('deathAns');
-        if(dQ && this.currentQ) {
-            dQ.innerHTML = this.formatMath(this.currentQ.q);
-            dAns.innerHTML = this.formatMath(this.currentQ.a);
-            if(window.MathJax) MathJax.typesetPromise([dQ, dAns]);
-        }
     },
 
     // --- SHOPS ---
     getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
     
     renderShops() {
+        // Stats
         const sDiv = document.getElementById('shopStats');
         if(sDiv) {
             sDiv.innerHTML = "";
@@ -363,11 +196,25 @@ const Game = {
                 sDiv.innerHTML += `<div class="shop-item"><h3>${stat.toUpperCase()} ${lvl}</h3><p>Level ${lvl}</p>${btn}</div>`;
             });
         }
+        // Items
         const iDiv = document.getElementById('shopItems');
         if(iDiv) {
             iDiv.innerHTML = "";
             [{k:'fifty',c:50},{k:'freeze',c:75},{k:'skip',c:100}].forEach(it => {
-                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${this.config.items[it.k]}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
+                let count = this.config.items[it.k];
+                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
+            });
+        }
+        // Gear
+        const gDiv = document.getElementById('shopGear');
+        if(gDiv) {
+            gDiv.innerHTML = "";
+            gearConfig.forEach(g => {
+                let owned = this.player.unlockedGear.includes(g.id);
+                let equipped = this.player.gear[g.type] === g.id;
+                let btnTxt = owned ? (equipped ? "UNEQUIP" : "EQUIP") : `${g.cost}g`;
+                let style = equipped ? "background:var(--gold); color:black;" : (owned ? "background:#444" : "");
+                gDiv.innerHTML += `<div class="shop-item"><div style="font-size:2rem">${g.icon}</div><h3>${g.name}</h3><p style="color:var(--gold)">${g.stat}</p><button class="buy-btn" style="${style}" onclick="Game.handleGear(${g.id}, ${g.cost})">${btnTxt}</button></div>`;
             });
         }
     },
@@ -376,57 +223,13 @@ const Game = {
         let lvl = this.config.stats[stat];
         let cost = this.getCost(lvl);
         if(this.config.gold >= cost && lvl < 10) {
-            this.config.gold -= cost; this.config.stats[stat]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
+            this.config.gold -= cost;
+            this.config.stats[stat]++;
+            this.saveConfig();
+            this.renderShops();
+            this.updateMenuUI();
         }
     },
     buyItem(key, cost) {
         if(this.config.gold >= cost) {
-            this.config.gold -= cost; this.config.items[key]++; 
-            this.saveConfig(); this.renderShops(); this.updateMenuUI();
-        }
-    },
-
-    switchTab(tab) {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        ['tabRun','shopStats','shopItems','shopGear'].forEach(id => {
-             const el = document.getElementById(id);
-             if(el) el.style.display = 'none';
-        });
-        
-        if(tab === 'run') document.getElementById('tabRun').style.display = 'flex';
-        else {
-            const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
-            if(el) el.style.display = 'grid';
-        }
-    },
-
-    // --- SCRATCHPAD ---
-    initScratchpad() {
-        let canvas = document.getElementById('drawLayer');
-        if(!canvas) {
-             canvas = document.createElement('canvas');
-             canvas.id = 'drawLayer';
-             canvas.style.zIndex = "5"; 
-             canvas.style.pointerEvents = "none"; 
-             document.body.appendChild(canvas);
-        }
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        this.scratch.ctx = canvas.getContext('2d');
-        
-        // DRAWING LOGIC
-        const start = (e) => {
-            if(!this.scratch.active) return;
-            this.scratch.isDrawing = true;
-            this.scratch.ctx.beginPath();
-            this.scratch.ctx.moveTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
-        };
-        const move = (e) => {
-            if(!this.scratch.active || !this.scratch.isDrawing) return;
-            e.preventDefault();
-            this.scratch.ctx.lineTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
-            this.scratch.ctx.strokeStyle = "yellow";
-            this.scratch.ctx.lineWidth = 3;
-            this.scratch.ctx.stroke();
-   
+            this.c
