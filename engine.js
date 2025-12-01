@@ -21,8 +21,7 @@ const Game = {
         // Default Face
         if(!this.player.face) this.player.face = "😐";
         
-        this.initScratchpad();
-        
+        // scratchpad removed for simplified UI
         // 1. Load Manifest
         await this.fetchManifest();
 
@@ -71,6 +70,11 @@ const Game = {
                 const data = JSON.parse(d);
                 this.config = data.config || this.config;
                 this.player = data.player || this.player;
+                // Ensure newer keys exist when loading older saves
+                if(!this.config.stats) this.config.stats = { hearts:0, timer:0, greed:0 };
+                if(!this.config.items) this.config.items = { skip:0, fifty:0, freeze:0, double:0, restore:0, focus:0 };
+                if(!this.player.gear) this.player.gear = { head:0, body:0, main:0, off:0, feet:0 };
+                if(!this.player.unlockedGear) this.player.unlockedGear = [0];
             }
         } catch(e) { console.error("Save corrupt", e); }
     },
@@ -169,30 +173,78 @@ const Game = {
         this.safeClassRemove('menuScreen', 'hidden');
         this.updateMenuUI();
         this.renderShops();
-        // Default to stats tab so something is visible
-        this.switchTab('stats');
-    },
-
-    updateMenuUI() {
-        this.safeText('menuGold', this.config.gold);
-        this.safeText('menuBest', this.config.best);
-        if(this.config.activeFiles) this.safeText('activeSubjectCount', this.config.activeFiles.length);
-        this.renderAvatar('p');
-    },
-
-    renderAvatar(prefix) {
-        this.safeText(prefix+'-face', this.player.face);
-        const slots = ['head','body','main','off','feet'];
-        slots.forEach(s => {
-            let g = gearConfig.find(x => x.id === this.player.gear[s]);
-            this.safeText(`${prefix}-${s}`, g ? g.icon : "");
-        });
-    },
-
-    // --- SHOPS ---
+            console.log('Engine: Rendering shops...', {gold:this.config.gold, items:this.config.items, unlocked:(this.player && this.player.unlockedGear)});
+            if(!this.config.items) this.config.items = {};
+            const defaults = ['fifty','freeze','skip','double','restore','focus'];
+            defaults.forEach(k=>{ if(typeof this.config.items[k] === 'undefined') this.config.items[k]=0; });
+            let stats = document.getElementById('shopStats');
+            let items = document.getElementById('shopItems');
+            let gear = document.getElementById('shopGear');
+            if(stats) stats.innerText = `Gold: ${this.config.gold}`;
+            if(items) items.innerHTML = `
+                <div class="shop-row">
+                    <div class="shop-item">
+                        <div class="shop-title">Fifty / 50-50</div>
+                        <div class="shop-desc">Remove two wrong choices</div>
+                        <div class="shop-cost">Cost: 10</div>
+                        <div class="shop-qty">Qty: <span id="countfifty">${this.config.items.fifty}</span></div>
+                        <button onclick="Game.buyItem('fifty',10)">Buy</button>
+                    </div>
+                    <div class="shop-item">
+                        <div class="shop-title">Freeze</div>
+                        <div class="shop-desc">Pause timer for 5s</div>
+                        <div class="shop-cost">Cost: 20</div>
+                        <div class="shop-qty">Qty: <span id="countfreeze">${this.config.items.freeze}</span></div>
+                        <button onclick="Game.buyItem('freeze',20)">Buy</button>
+                    </div>
+                    <div class="shop-item">
+                        <div class="shop-title">Skip</div>
+                        <div class="shop-desc">Skip current question</div>
+                        <div class="shop-cost">Cost: 15</div>
+                        <div class="shop-qty">Qty: <span id="countskip">${this.config.items.skip}</span></div>
+                        <button onclick="Game.buyItem('skip',15)">Buy</button>
+                    </div>
+                </div>
+                <div class="shop-row">
+                    <div class="shop-item">
+                        <div class="shop-title">Double</div>
+                        <div class="shop-desc">Double points for next correct</div>
+                        <div class="shop-cost">Cost: 25</div>
+                        <div class="shop-qty">Qty: <span id="countdouble">${this.config.items.double}</span></div>
+                        <button onclick="Game.buyItem('double',25)">Buy</button>
+                    </div>
+                    <div class="shop-item">
+                        <div class="shop-title">Restore</div>
+                        <div class="shop-desc">Restore health</div>
+                        <div class="shop-cost">Cost: 30</div>
+                        <div class="shop-qty">Qty: <span id="countrestore">${this.config.items.restore}</span></div>
+                        <button onclick="Game.buyItem('restore',30)">Buy</button>
+                    </div>
+                    <div class="shop-item">
+                        <div class="shop-title">Focus</div>
+                        <div class="shop-desc">Slow down time for 10s</div>
+                        <div class="shop-cost">Cost: 40</div>
+                        <div class="shop-qty">Qty: <span id="countfocus">${this.config.items.focus}</span></div>
+                        <button onclick="Game.buyItem('focus',40)">Buy</button>
+                    </div>
+                </div>
+            `;
+            if(gear && Array.isArray(gearConfig)) {
+                let html = '';
+                gearConfig.forEach(g=>{
+                    let unlocked = this.player.unlockedGear && this.player.unlockedGear.includes(g.id);
+                    html += `<div class="gear-item">
+                        <div class="gear-name">${g.title}</div>
+                        <div class="gear-cost">${unlocked ? 'Unlocked' : 'Cost: '+g.cost}</div>
+                        <button onclick="Game.handleGear(${g.id},${g.cost})">${unlocked ? (this.player.gear && this.player.gear[g.type]===g.id ? 'Unequip' : 'Equip') : 'Buy'}</button>
+                    </div>`;
+                });
+                gear.innerHTML = html;
+            }
     getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
     
     renderShops() {
+        console.log('Engine: Rendering shops...', {gold: this.config.gold, items: this.config.items, unlocked: this.player.unlockedGear});
         // Stats
         const sDiv = document.getElementById('shopStats');
         if(sDiv) {
@@ -219,6 +271,7 @@ const Game = {
                 {k:'focus',c:70,icon:'🎯',name:'Focus',desc:'Add 10 seconds to timer'}
             ];
             items.forEach(it => {
+                if(!this.config.items) this.config.items = {};
                 if(!this.config.items[it.k]) this.config.items[it.k] = 0;
                 let count = this.config.items[it.k];
                  iDiv.innerHTML += `<div class="shop-item"><div style="font-size:1.5rem">${it.icon}</div><h3>${it.name}</h3><p style="font-size:0.7rem;color:#888">${it.desc}</p><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
@@ -250,25 +303,36 @@ const Game = {
         }
     },
     buyItem(key, cost) {
+        console.log('Engine: buyItem', key, cost, 'goldBefore', this.config.gold);
+        if(!this.config.items) this.config.items = {};
+        if(typeof this.config.items[key] === 'undefined') this.config.items[key] = 0;
         if(this.config.gold >= cost) {
             this.config.gold -= cost;
             this.config.items[key]++;
             this.saveConfig();
             this.renderShops();
             this.updateMenuUI();
+        } else {
+            console.warn('Not enough gold for', key, cost, 'have', this.config.gold);
         }
     },
     handleGear(id, cost) {
+        console.log('Engine: handleGear', id, cost, 'goldBefore', this.config.gold);
+        let item = gearConfig.find(x=>x.id===id);
+        if(!item) { console.error('Gear item not found for id', id); return; }
+        if(!this.player.unlockedGear) this.player.unlockedGear = [];
         if(this.player.unlockedGear.includes(id)) {
-            let item = gearConfig.find(x=>x.id===id);
+            if(!this.player.gear) this.player.gear = {head:0,body:0,main:0,off:0,feet:0};
             if(this.player.gear[item.type] === id) this.player.gear[item.type] = 0; 
             else this.player.gear[item.type] = id;
         } else {
             if(this.config.gold >= cost) {
                 this.config.gold -= cost;
                 this.player.unlockedGear.push(id);
-                let item = gearConfig.find(x=>x.id===id);
+                if(!this.player.gear) this.player.gear = {head:0,body:0,main:0,off:0,feet:0};
                 this.player.gear[item.type] = id;
+            } else {
+                console.warn('Not enough gold to buy gear', id, cost, 'have', this.config.gold);
             }
         }
         this.saveConfig();
@@ -413,9 +477,9 @@ const Game = {
         const qText = document.getElementById('qText');
         qText.innerHTML = this.formatMath(content.q);
         
-        // Force MathJax Update
+        // Force MathJax Update (typeset entire document to ensure rendering)
         if(window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise([document.getElementById('qArea'), document.getElementById('preambleBox')]);
+            window.MathJax.typesetPromise().catch(() => {});
         }
 
         const inp = document.getElementById('inputContainer');
@@ -432,13 +496,13 @@ const Game = {
             grid.appendChild(btn);
         });
 
-        if(window.MathJax) window.MathJax.typesetPromise([grid]);
+        if(window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise().catch(()=>{});
 
         this.run.timeLeft = this.run.timerMax;
         clearInterval(this.run.timerInterval);
         this.renderTimer();
         this.run.timerInterval = setInterval(() => {
-            if(!this.run.freeze && !this.scratch.active) this.run.timeLeft--;
+            if(!this.run.freeze) this.run.timeLeft--;
             this.renderTimer();
             if(this.run.timeLeft <= 0) this.handleAnswer(false);
         }, 1000);
@@ -498,7 +562,7 @@ const Game = {
             dQ.innerHTML = this.formatMath(this.currentQ.q);
             let ansTxt = (this.currentQ.type === 'choice') ? this.currentQ.a.toString() : "See above";
             dAns.innerHTML = this.formatMath(ansTxt);
-            if(window.MathJax) MathJax.typesetPromise([dQ, dAns]);
+            if(window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise().catch(()=>{});
         }
     },
 
@@ -538,61 +602,7 @@ const Game = {
         location.reload();
     },
 
-    // --- SCRATCHPAD ---
-    initScratchpad() {
-        let canvas = document.getElementById('drawLayer');
-        if(!canvas) {
-             canvas = document.createElement('canvas');
-             canvas.id = 'drawLayer';
-             canvas.style.position = "absolute";
-             canvas.style.top = "0";
-             canvas.style.left = "0";
-             canvas.style.width = "100%";
-             canvas.style.height = "100%";
-             canvas.style.zIndex = "50"; 
-             canvas.style.pointerEvents = "none"; 
-             document.body.appendChild(canvas);
-        }
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        this.scratch.ctx = canvas.getContext('2d');
-        this.scratch.el = canvas;
-
-        const start = (e) => {
-            if(!this.scratch.active) return;
-            this.scratch.isDrawing = true;
-            this.scratch.ctx.beginPath();
-            this.scratch.ctx.moveTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
-        };
-        const move = (e) => {
-            if(!this.scratch.active || !this.scratch.isDrawing) return;
-            e.preventDefault();
-            this.scratch.ctx.lineTo(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
-            this.scratch.ctx.strokeStyle = "yellow";
-            this.scratch.ctx.lineWidth = 3;
-            this.scratch.ctx.stroke();
-        };
-        const end = () => { this.scratch.isDrawing = false; };
-
-        canvas.addEventListener('mousedown', start);
-        canvas.addEventListener('mousemove', move);
-        canvas.addEventListener('mouseup', end);
-        canvas.addEventListener('touchstart', start, {passive: false});
-        canvas.addEventListener('touchmove', move, {passive: false});
-        canvas.addEventListener('touchend', end);
-    },
-    
-    toggleScratch() {
-        this.scratch.active = !this.scratch.active;
-        if(this.scratch.active) {
-            this.scratch.el.style.pointerEvents = "auto";
-            this.scratch.el.style.background = "rgba(0,0,0,0.1)";
-        } else {
-            this.scratch.el.style.pointerEvents = "none";
-            this.scratch.el.style.background = "transparent";
-            this.scratch.ctx.clearRect(0, 0, this.scratch.el.width, this.scratch.el.height);
-        }
-    },
+    // scratchpad feature removed
 
     pauseGame() {
         this.safeClassRemove('pauseOverlay', 'hidden');
@@ -602,7 +612,7 @@ const Game = {
         this.safeClassAdd('pauseOverlay', 'hidden');
         this.renderTimer();
         this.run.timerInterval = setInterval(() => {
-            if(!this.run.freeze && !this.scratch.active) this.run.timeLeft--;
+            if(!this.run.freeze) this.run.timeLeft--;
             this.renderTimer();
             if(this.run.timeLeft <= 0) this.handleAnswer(false);
         }, 1000);
@@ -659,7 +669,6 @@ const gearConfig = [
     { id: 206, type: 'body', name: "Kimono", icon: "👙", cost: 400, stat: "HP +2, Gold +10%" },
     
     // MAIN HAND (Weapon/Tool)
-    { id: 301, type: 'main', name: "Pencil", icon: "✏️", cost: 100, stat: "Gold +5%" },
     { id: 302, type: 'main', name: "Sword", icon: "⚡", cost: 500, stat: "HP +3" },
     { id: 303, type: 'main', name: "Book", icon: "📚", cost: 200, stat: "Time +8" },
     { id: 304, type: 'main', name: "Wand", icon: "✨", cost: 400, stat: "Gold +15%" },
