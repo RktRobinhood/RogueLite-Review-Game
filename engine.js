@@ -53,13 +53,20 @@ const Game = {
 
     // Content Registration
     addPack(pack) {
-        if(!pack.questions) return;
-        pack.questions.forEach(q => {
-            q._src = pack.id; 
-            q._uid = pack.id + "_" + Math.random().toString(36).substr(2,9);
-            this.library.push(q);
-        });
-        console.log(`Engine: Registered ${pack.name} (${pack.questions.length} Qs)`);
+        try {
+            if(!pack || !pack.questions) {
+                console.warn('Engine: addPack called with invalid pack', pack);
+                return;
+            }
+            pack.questions.forEach(q => {
+                q._src = pack.id; 
+                q._uid = pack.id + "_" + Math.random().toString(36).substr(2,9);
+                this.library.push(q);
+            });
+            console.log(`Engine: Registered ${pack.name} (${pack.questions.length} Qs)`);
+        } catch(e) {
+            console.error('Engine: Error registering pack', pack && pack.id, e);
+        }
     },
 
     // --- DATA & SAVES ---
@@ -83,7 +90,11 @@ const Game = {
             config: this.config,
             player: this.player
         }));
-        this.updateMenuUI();
+        if(this.updateMenuUI && typeof this.updateMenuUI === 'function') {
+            try { this.updateMenuUI(); } catch(e) { console.error('updateMenuUI() error', e); }
+        } else {
+            console.warn('updateMenuUI not available');
+        }
     },
 
     async fetchManifest() {
@@ -121,6 +132,45 @@ const Game = {
     safeClassRemove(id, cls) { const el = document.getElementById(id); if(el) el.classList.remove(cls); },
     safeClassAdd(id, cls) { const el = document.getElementById(id); if(el) el.classList.add(cls); },
     safeText(id, txt) { const el = document.getElementById(id); if(el) el.innerText = txt; },
+    updateMenuUI() {
+        const g = document.getElementById('menuGold'); if(g) g.innerText = this.config.gold;
+        const b = document.getElementById('menuBest'); if(b) b.innerText = this.config.best;
+        const cnt = document.getElementById('activeSubjectCount'); if(cnt) cnt.innerText = (this.config.activeFiles || []).length;
+    },
+    renderAvatar(which='p') {
+        // which: 'p' = menu/avatar, 'g' = game small avatar
+        const prefix = which === 'g' ? 'g' : 'p';
+        const faceId = prefix + '-face';
+        const headId = prefix + '-head';
+        const bodyId = prefix + '-body';
+        const mainId = prefix + '-main';
+        const offId = prefix + '-off';
+        const feetId = prefix + '-feet';
+
+        const faceEl = document.getElementById(faceId);
+        if(faceEl) faceEl.innerText = this.player.face || '😐';
+
+        // Clear previous layers
+        const headEl = document.getElementById(headId);
+        const bodyEl = document.getElementById(bodyId);
+        const mainEl = document.getElementById(mainId);
+        const offEl = document.getElementById(offId);
+        const feetEl = document.getElementById(feetId);
+
+        const fillLayer = (el, type) => {
+            if(!el) return;
+            const id = this.player && this.player.gear && this.player.gear[type];
+            if(!id) { el.innerText = ''; return; }
+            const g = gearConfig.find(x=>x.id===id);
+            el.innerText = g ? g.icon || g.name || '' : '';
+        };
+
+        fillLayer(headEl, 'head');
+        fillLayer(bodyEl, 'body');
+        fillLayer(mainEl, 'main');
+        fillLayer(offEl, 'off');
+        fillLayer(feetEl, 'feet');
+    },
     
     formatMath(str) {
         if(!str) return "";
@@ -693,4 +743,18 @@ const gearConfig = [
     { id: 506, type: 'feet', name: "Golden Shoes", icon: "✨", cost: 400, stat: "Gold +30%" }
 ];
 
-window.onload = () => Game.init();
+// Global error handlers for better diagnostics
+window.addEventListener('error', (ev) => {
+    console.error('Global Error:', ev.message, ev.filename + ':' + ev.lineno, ev.error);
+});
+window.addEventListener('unhandledrejection', (ev) => {
+    console.error('Unhandled Promise Rejection:', ev.reason);
+});
+
+window.onload = () => {
+    try {
+        Game.init();
+    } catch(e) {
+        console.error('Game.init() threw:', e);
+    }
+};
