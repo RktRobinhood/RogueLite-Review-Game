@@ -241,6 +241,7 @@ const Game = {
                 });
                 gear.innerHTML = html;
             }
+        },
     getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
     
     renderShops() {
