@@ -168,6 +168,7 @@ const Game = {
     showMenu() {
         this.safeClassRemove('menuScreen', 'hidden');
         this.updateMenuUI();
+        this.renderShops();
         // Default to stats tab so something is visible
         this.switchTab('stats');
     },
@@ -209,9 +210,18 @@ const Game = {
         const iDiv = document.getElementById('shopItems');
         if(iDiv) {
             iDiv.innerHTML = "";
-            [{k:'fifty',c:50},{k:'freeze',c:75},{k:'skip',c:100}].forEach(it => {
+            let items = [
+                {k:'fifty',c:50,icon:'✂️',name:'50/50 Chance',desc:'Remove 2 wrong answers'},
+                {k:'freeze',c:75,icon:'❄️',name:'Time Freeze',desc:'Pause timer 5 seconds'},
+                {k:'skip',c:100,icon:'⏭️',name:'Skip Question',desc:'Skip to next question'},
+                {k:'double',c:150,icon:'2️⃣',name:'Double Gold',desc:'2x gold next question'},
+                {k:'restore',c:90,icon:'❤️',name:'Health Restore',desc:'Restore 1 HP'},
+                {k:'focus',c:70,icon:'🎯',name:'Focus',desc:'Add 10 seconds to timer'}
+            ];
+            items.forEach(it => {
+                if(!this.config.items[it.k]) this.config.items[it.k] = 0;
                 let count = this.config.items[it.k];
-                 iDiv.innerHTML += `<div class="shop-item"><h3>${it.k.toUpperCase()}</h3><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
+                 iDiv.innerHTML += `<div class="shop-item"><div style="font-size:1.5rem">${it.icon}</div><h3>${it.name}</h3><p style="font-size:0.7rem;color:#888">${it.desc}</p><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
             });
         }
         // Gear
@@ -367,6 +377,7 @@ const Game = {
     },
 
     renderChainStep() {
+        if(!this.run.chain || !this.run.chain.data || !this.run.chain.data.steps) return this.nextQ();
         const stepData = this.run.chain.data.steps[this.run.chain.step];
         const preBox = document.getElementById('preambleBox');
         if(preBox) {
@@ -391,8 +402,11 @@ const Game = {
             const ch = document.getElementById('hudChain');
             if(ch) ch.style.display = 'none';
             if(content.preamble) {
-                 pre.style.display = 'block';
-                 pre.innerHTML = this.formatMath(content.preamble);
+                 const preBox = document.getElementById('preambleBox');
+                 if(preBox) {
+                     preBox.style.display = 'block';
+                     preBox.innerHTML = this.formatMath(content.preamble);
+                 }
             }
         }
 
@@ -454,10 +468,9 @@ const Game = {
     updateHUD() {
         this.safeText('hudLives', "❤️".repeat(this.run.hp));
         this.safeText('hudGold', this.run.gold);
-        ['Fifty','Freeze','Skip'].forEach(k => {
-            let key = k.toLowerCase();
-            if(document.getElementById('count'+key)) 
-                 document.getElementById('count'+key).innerText = this.config.items[key];
+        ['fifty','freeze','skip','double','restore','focus'].forEach(k => {
+            if(document.getElementById('count'+k)) 
+                 document.getElementById('count'+k).innerText = this.config.items[k] || 0;
         });
     },
 
@@ -489,13 +502,7 @@ const Game = {
         }
     },
 
-    // --- UTILS ---
-    formatMath(str) {
-        if(!str) return "";
-        let s = str.toString();
-        if(s.match(/[\\^_{}]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) return `$$ ${s} $$`;
-        return s;
-    },
+
     
     // --- SETTINGS ---
     openSettings() { 
@@ -623,16 +630,57 @@ const Game = {
                  this.saveConfig();
              }
         }
+        if(type === 'freeze') {
+            this.run.freeze = true;
+            this.config.items.freeze--;
+            this.saveConfig();
+            setTimeout(() => { this.run.freeze = false; }, 5000); // 5 second freeze
+        }
         this.updateHUD();
     }
 };
 
 // Configs
 const gearConfig = [
+    // HEAD GEAR
     { id: 101, type: 'head', name: "Beanie", icon: "🧢", cost: 150, stat: "Time +5" },
     { id: 102, type: 'head', name: "Crown", icon: "👑", cost: 1000, stat: "Gold +50%" },
+    { id: 103, type: 'head', name: "Headband", icon: "🎀", cost: 200, stat: "HP +1" },
+    { id: 104, type: 'head', name: "Goggles", icon: "🥽", cost: 300, stat: "Time +10" },
+    { id: 105, type: 'head', name: "Tiara", icon: "💎", cost: 500, stat: "Gold +25%" },
+    { id: 106, type: 'head', name: "Helmet", icon: "⚔️", cost: 400, stat: "HP +2" },
+    
+    // BODY GEAR
     { id: 201, type: 'body', name: "Tee", icon: "👕", cost: 150, stat: "HP +1" },
-    { id: 301, type: 'main', name: "Pencil", icon: "✏️", cost: 100, stat: "Gold +5%" }
+    { id: 202, type: 'body', name: "Hoodie", icon: "🧥", cost: 250, stat: "HP +2" },
+    { id: 203, type: 'body', name: "Robe", icon: "👘", cost: 350, stat: "Gold +20%" },
+    { id: 204, type: 'body', name: "Vest", icon: "🦺", cost: 200, stat: "HP +1, Time +3" },
+    { id: 205, type: 'body', name: "Suit", icon: "🤵", cost: 600, stat: "Gold +40%" },
+    { id: 206, type: 'body', name: "Kimono", icon: "👙", cost: 400, stat: "HP +2, Gold +10%" },
+    
+    // MAIN HAND (Weapon/Tool)
+    { id: 301, type: 'main', name: "Pencil", icon: "✏️", cost: 100, stat: "Gold +5%" },
+    { id: 302, type: 'main', name: "Sword", icon: "⚡", cost: 500, stat: "HP +3" },
+    { id: 303, type: 'main', name: "Book", icon: "📚", cost: 200, stat: "Time +8" },
+    { id: 304, type: 'main', name: "Wand", icon: "✨", cost: 400, stat: "Gold +15%" },
+    { id: 305, type: 'main', name: "Torch", icon: "🔥", cost: 300, stat: "Time +10" },
+    { id: 306, type: 'main', name: "Scepter", icon: "👑", cost: 800, stat: "Gold +35%, Time +5" },
+    
+    // OFF HAND (Shield/Item)
+    { id: 401, type: 'off', name: "Shield", icon: "🛡️", cost: 250, stat: "HP +2" },
+    { id: 402, type: 'off', name: "Notebook", icon: "📓", cost: 150, stat: "Gold +8%" },
+    { id: 403, type: 'off', name: "Compass", icon: "🧭", cost: 350, stat: "Time +12" },
+    { id: 404, type: 'off', name: "Mirror", icon: "🪞", cost: 300, stat: "HP +1, Gold +10%" },
+    { id: 405, type: 'off', name: "Lantern", icon: "🏮", cost: 400, stat: "Time +15" },
+    { id: 406, type: 'off', name: "Orb", icon: "🔮", cost: 600, stat: "HP +2, Gold +25%" },
+    
+    // FEET GEAR
+    { id: 501, type: 'feet', name: "Sneakers", icon: "👟", cost: 100, stat: "Time +5" },
+    { id: 502, type: 'feet', name: "Boots", icon: "🥾", cost: 200, stat: "HP +1" },
+    { id: 503, type: 'feet', name: "Heels", icon: "👠", cost: 250, stat: "Gold +15%" },
+    { id: 504, type: 'feet', name: "Slippers", icon: "🩰", cost: 180, stat: "Time +7" },
+    { id: 505, type: 'feet', name: "Winged Shoes", icon: "🦅", cost: 500, stat: "Time +20" },
+    { id: 506, type: 'feet', name: "Golden Shoes", icon: "✨", cost: 400, stat: "Gold +30%" }
 ];
 
 window.onload = () => Game.init();

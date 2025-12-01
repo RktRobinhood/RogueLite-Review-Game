@@ -95,6 +95,9 @@
                 <div class="p-btn" id="btnFifty" onclick="Game.usePowerup('fifty')">✂️<div class="p-count" id="countfifty">0</div></div>
                 <div class="p-btn" id="btnFreeze" onclick="Game.usePowerup('freeze')">❄️<div class="p-count" id="countfreeze">0</div></div>
                 <div class="p-btn" id="btnSkip" onclick="Game.usePowerup('skip')">⏭️<div class="p-count" id="countskip">0</div></div>
+                <div class="p-btn" id="btnDouble" onclick="Game.usePowerup('double')">2️⃣<div class="p-count" id="countdouble">0</div></div>
+                <div class="p-btn" id="btnRestore" onclick="Game.usePowerup('restore')">❤️<div class="p-count" id="countrestore">0</div></div>
+                <div class="p-btn" id="btnFocus" onclick="Game.usePowerup('focus')">🎯<div class="p-count" id="countfocus">0</div></div>
             </div>
         </div>
         
@@ -130,6 +133,16 @@
     </div>
 
     <div id="inputContainer"></div>
+</div>
+
+<!-- PAUSE OVERLAY -->
+<div id="pauseOverlay" class="screen center hidden" style="background:rgba(0,0,0,0.85); z-index: 2500;">
+    <div style="background:var(--panel); padding:30px; border-radius:10px; text-align:center; max-width:300px;">
+        <h1 style="color:var(--gold)">PAUSED</h1>
+        <p style="color:#aaa; margin:20px 0;">Game is paused</p>
+        <button class="big-btn" style="margin:10px 0; width:100%;" onclick="Game.resumeGame()">RESUME</button>
+        <button class="big-btn" style="margin:10px 0; width:100%; background:#c0392b;" onclick="Game.quitRun()">QUIT</button>
+    </div>
 </div>
 
 <!-- GAME OVER -->
