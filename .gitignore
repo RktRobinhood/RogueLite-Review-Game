@@ -1,0 +1,22 @@
+# VS Code settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node/npm (if you use npm later)
+node_modules/
+package-lock.json
+
+# Editor temp files
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.local
