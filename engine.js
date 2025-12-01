@@ -36,6 +36,12 @@ const Game = {
             console.log(`Engine: Content Ready. ${this.library.length} templates loaded.`);
         }
 
+        // Build content index for EventFramework if available
+        if(window.EventFramework) {
+            try { EventFramework.buildIndex(this.library); EventFramework.init(this); }
+            catch(e) { console.error('EventFramework init failed', e); }
+        }
+
         // 3. Hide Loader
         const loader = document.getElementById('loader');
         if(loader) {
@@ -176,8 +182,16 @@ const Game = {
         if(!str) return "";
         let s = str.toString();
         // Basic Latex detection: if it has backslashes or carets, wrap in $$
-        if(s.match(/[\\^_{}]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) {
-            // Avoid double wrapping if already wrapped
+        // If it already contains common TeX delimiters, assume it's already formatted
+        const hasDollar = s.includes('$');
+        const hasParenDelim = s.includes('\\(') || s.includes('\\)') || s.includes('\\[') || s.includes('\\]');
+        const hasBegin = s.includes('\\begin');
+        if(hasDollar || hasParenDelim || hasBegin) {
+            return s;
+        }
+
+        // Otherwise, if it contains TeX-like tokens, wrap in display math
+        if(s.match(/[\\^_{}/]/) || s.includes('log') || s.includes('sin') || s.includes('pi')) {
             if(!s.trim().startsWith('$$')) return `$$ ${s} $$`;
         }
         return s;
@@ -223,74 +237,6 @@ const Game = {
         this.safeClassRemove('menuScreen', 'hidden');
         this.updateMenuUI();
         this.renderShops();
-            console.log('Engine: Rendering shops...', {gold:this.config.gold, items:this.config.items, unlocked:(this.player && this.player.unlockedGear)});
-            if(!this.config.items) this.config.items = {};
-            const defaults = ['fifty','freeze','skip','double','restore','focus'];
-            defaults.forEach(k=>{ if(typeof this.config.items[k] === 'undefined') this.config.items[k]=0; });
-            let stats = document.getElementById('shopStats');
-            let items = document.getElementById('shopItems');
-            let gear = document.getElementById('shopGear');
-            if(stats) stats.innerText = `Gold: ${this.config.gold}`;
-            if(items) items.innerHTML = `
-                <div class="shop-row">
-                    <div class="shop-item">
-                        <div class="shop-title">Fifty / 50-50</div>
-                        <div class="shop-desc">Remove two wrong choices</div>
-                        <div class="shop-cost">Cost: 10</div>
-                        <div class="shop-qty">Qty: <span id="countfifty">${this.config.items.fifty}</span></div>
-                        <button onclick="Game.buyItem('fifty',10)">Buy</button>
-                    </div>
-                    <div class="shop-item">
-                        <div class="shop-title">Freeze</div>
-                        <div class="shop-desc">Pause timer for 5s</div>
-                        <div class="shop-cost">Cost: 20</div>
-                        <div class="shop-qty">Qty: <span id="countfreeze">${this.config.items.freeze}</span></div>
-                        <button onclick="Game.buyItem('freeze',20)">Buy</button>
-                    </div>
-                    <div class="shop-item">
-                        <div class="shop-title">Skip</div>
-                        <div class="shop-desc">Skip current question</div>
-                        <div class="shop-cost">Cost: 15</div>
-                        <div class="shop-qty">Qty: <span id="countskip">${this.config.items.skip}</span></div>
-                        <button onclick="Game.buyItem('skip',15)">Buy</button>
-                    </div>
-                </div>
-                <div class="shop-row">
-                    <div class="shop-item">
-                        <div class="shop-title">Double</div>
-                        <div class="shop-desc">Double points for next correct</div>
-                        <div class="shop-cost">Cost: 25</div>
-                        <div class="shop-qty">Qty: <span id="countdouble">${this.config.items.double}</span></div>
-                        <button onclick="Game.buyItem('double',25)">Buy</button>
-                    </div>
-                    <div class="shop-item">
-                        <div class="shop-title">Restore</div>
-                        <div class="shop-desc">Restore health</div>
-                        <div class="shop-cost">Cost: 30</div>
-                        <div class="shop-qty">Qty: <span id="countrestore">${this.config.items.restore}</span></div>
-                        <button onclick="Game.buyItem('restore',30)">Buy</button>
-                    </div>
-                    <div class="shop-item">
-                        <div class="shop-title">Focus</div>
-                        <div class="shop-desc">Slow down time for 10s</div>
-                        <div class="shop-cost">Cost: 40</div>
-                        <div class="shop-qty">Qty: <span id="countfocus">${this.config.items.focus}</span></div>
-                        <button onclick="Game.buyItem('focus',40)">Buy</button>
-                    </div>
-                </div>
-            `;
-            if(gear && Array.isArray(gearConfig)) {
-                let html = '';
-                gearConfig.forEach(g=>{
-                    let unlocked = this.player.unlockedGear && this.player.unlockedGear.includes(g.id);
-                    html += `<div class="gear-item">
-                        <div class="gear-name">${g.title}</div>
-                        <div class="gear-cost">${unlocked ? 'Unlocked' : 'Cost: '+g.cost}</div>
-                        <button onclick="Game.handleGear(${g.id},${g.cost})">${unlocked ? (this.player.gear && this.player.gear[g.type]===g.id ? 'Unequip' : 'Equip') : 'Buy'}</button>
-                    </div>`;
-                });
-                gear.innerHTML = html;
-            }
         },
     getCost(lvl) { return Math.floor(100 * Math.pow(1.5, lvl)); },
     
@@ -328,16 +274,24 @@ const Game = {
                  iDiv.innerHTML += `<div class="shop-item"><div style="font-size:1.5rem">${it.icon}</div><h3>${it.name}</h3><p style="font-size:0.7rem;color:#888">${it.desc}</p><p>Owned: ${count}</p><button class="buy-btn" onclick="Game.buyItem('${it.k}',${it.c})">${it.c}g</button></div>`;
             });
         }
-        // Gear
+        // Gear (grouped by type)
         const gDiv = document.getElementById('shopGear');
         if(gDiv) {
             gDiv.innerHTML = "";
-            gearConfig.forEach(g => {
-                let owned = this.player.unlockedGear.includes(g.id);
-                let equipped = this.player.gear[g.type] === g.id;
-                let btnTxt = owned ? (equipped ? "UNEQUIP" : "EQUIP") : `${g.cost}g`;
-                let style = equipped ? "background:var(--gold); color:black;" : (owned ? "background:#444" : "");
-                gDiv.innerHTML += `<div class="shop-item"><div style="font-size:2rem">${g.icon}</div><h3>${g.name}</h3><p style="color:var(--gold)">${g.stat}</p><button class="buy-btn" style="${style}" onclick="Game.handleGear(${g.id}, ${g.cost})">${btnTxt}</button></div>`;
+            const groups = { head: [], body: [], main: [], off: [], feet: [] };
+            gearConfig.forEach(g => { if(!groups[g.type]) groups[g.type] = []; groups[g.type].push(g); });
+            Object.keys(groups).forEach(type => {
+                const arr = groups[type];
+                if(!arr || arr.length === 0) return;
+                // Section header spanning both columns
+                gDiv.innerHTML += `<div style="grid-column:1/-1; text-align:left; font-weight:bold; margin:6px 0 4px 0; color:#ddd">${type.toUpperCase()}</div>`;
+                arr.forEach(g => {
+                    let owned = this.player.unlockedGear && this.player.unlockedGear.includes(g.id);
+                    let equipped = this.player.gear && this.player.gear[g.type] === g.id;
+                    let btnTxt = owned ? (equipped ? "UNEQUIP" : "EQUIP") : `${g.cost}g`;
+                    let style = equipped ? "background:var(--gold); color:black;" : (owned ? "background:#444" : "");
+                    gDiv.innerHTML += `<div class="shop-item"><div style="font-size:2rem">${g.icon}</div><h3>${g.name}</h3><p style="font-size:0.8rem;color:#ccc">${g.stat}</p><button class="buy-btn" style="${style}" onclick="Game.handleGear(${g.id}, ${g.cost})">${btnTxt}</button></div>`;
+                });
             });
         }
     },
@@ -392,18 +346,18 @@ const Game = {
     },
 
     switchTab(tab) {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        // Highlight active
-        let btns = document.querySelectorAll('.nav-btn');
-        if(tab === 'stats') btns[0].classList.add('active');
-        if(tab === 'items') btns[1].classList.add('active');
-        if(tab === 'gear') btns[2].classList.add('active');
+        const btns = Array.from(document.querySelectorAll('.nav-btn'));
+        btns.forEach(b => b.classList.remove('active'));
+        // Highlight active safely
+        if(btns.length > 0 && tab === 'stats') btns[0].classList.add('active');
+        if(btns.length > 1 && tab === 'items') btns[1].classList.add('active');
+        if(btns.length > 2 && tab === 'gear') btns[2].classList.add('active');
 
-        // Show correct section
-        ['shopStats','shopItems','shopGear'].forEach(id => {
-             const el = document.getElementById(id);
-             if(el) el.style.display = 'none';
-        });
+           // Show correct section: use the 'hidden' class so CSS !important rules are respected
+           ['shopStats','shopItems','shopGear'].forEach(id => {
+               const el = document.getElementById(id);
+               if(el) el.classList.add('hidden');
+           });
         
         // Logic for the new UI where play is separate
         if(tab === 'run') {
@@ -411,7 +365,9 @@ const Game = {
             // But we keep the function signature for compatibility
         } else {
             const el = document.getElementById('shop'+tab.charAt(0).toUpperCase()+tab.slice(1));
-            if(el) el.style.display = 'grid';
+            if(el) el.classList.remove('hidden');
+            // Ensure the content is populated for the tab we just showed
+            try { this.renderShops(); } catch(e) { console.error('switchTab: renderShops failed', e); }
         }
     },
 
@@ -438,6 +394,7 @@ const Game = {
             gold: 0,
             deck: deck, 
             playDeck: [], 
+            qCount: 0,
             timerMax: 30 + (this.config.stats.timer * 5) + gearStats.time,
             timeLeft: 30,
             freeze: false,
@@ -455,6 +412,10 @@ const Game = {
     nextQ() {
         if(this.run.hp <= 0) return this.gameOver();
 
+        // increment question counter (used by EventFramework scheduling)
+        if(typeof this.run.qCount === 'undefined') this.run.qCount = 0;
+        this.run.qCount++;
+
         // 1. Chains
         if(this.run.chain) {
             this.run.chain.step++;
@@ -471,24 +432,55 @@ const Game = {
             this.run.playDeck = [...this.run.deck].sort(() => Math.random() - 0.5);
         }
 
-        // 3. Pick
-        let template = this.run.playDeck.pop();
+        // 3. Pick (allow EventFramework to inject special events every N questions)
+        let template = null;
+        try {
+            if(window.EventFramework && EventFramework.maybeInject) template = EventFramework.maybeInject(this);
+        } catch(e) { console.error('EventFramework.maybeInject error', e); }
+        if(!template) template = this.run.playDeck.pop();
 
         // 4. Render
         if(template.type === 'chain') {
             this.run.chain = { data: template.data, step: 0 };
             this.renderChainStep();
-        } else {
-            let content;
+            return;
+        }
+
+        // Boss encounter handling
+        if(template.type === 'boss') {
+            // store boss state on run
+            this.run.boss = {
+                content: template.data,
+                meta: Object.assign({}, template._meta)
+            };
+            // show boss HUD (reuse hudChain for compact display)
+            const chainHud = document.getElementById('hudChain');
+            if(chainHud) {
+                chainHud.style.display = 'block';
+                chainHud.innerText = `BOSS: ${this.run.boss.meta.event.toUpperCase()} HP ${this.run.boss.meta.hp}/${this.run.boss.meta.maxHp}`;
+            }
+            // render the boss question
             try {
-                let isBoss = (this.run.score > 0 && (this.run.score+1) % 10 === 0);
-                content = template.gen ? template.gen(isBoss) : template.data;
+                const content = this.run.boss.content;
+                this.renderInput('choice', content);
             } catch(e) {
-                console.error("Gen Error", e);
+                console.error('Boss render error', e);
+                this.run.boss = null;
                 return this.nextQ();
             }
-            this.renderInput('choice', content);
+            return;
         }
+
+        // Normal question
+        let content;
+        try {
+            let isBoss = (this.run.score > 0 && (this.run.score+1) % 10 === 0);
+            content = template.gen ? template.gen(isBoss) : template.data;
+        } catch(e) {
+            console.error("Gen Error", e);
+            return this.nextQ();
+        }
+        this.renderInput('choice', content);
     },
 
     renderChainStep() {
@@ -506,6 +498,23 @@ const Game = {
             chainHud.innerText = `CHAIN: ${this.run.chain.step + 1}/${this.run.chain.data.steps.length}`;
         }
         this.renderInput('choice', stepData, true);
+    },
+
+    // Robust MathJax typeset helper: retries a few times if MathJax isn't ready yet
+    typesetMath(retries = 8, delay = 120) {
+        if(window.MathJax && window.MathJax.typesetPromise) {
+            try {
+                window.MathJax.typesetPromise();
+            } catch(e) {
+                console.warn('MathJax.typesetPromise failed:', e);
+            }
+            return;
+        }
+        if(retries <= 0) {
+            console.warn('typesetMath: MathJax not available after retries');
+            return;
+        }
+        setTimeout(() => this.typesetMath(retries - 1, delay), delay);
     },
 
     renderInput(type, content, keepPreamble = false) {
@@ -529,25 +538,85 @@ const Game = {
         qText.innerHTML = this.formatMath(content.q);
         
         // Force MathJax Update (typeset entire document to ensure rendering)
-        if(window.MathJax && window.MathJax.typesetPromise) {
-            window.MathJax.typesetPromise().catch(() => {});
-        }
+        this.typesetMath();
 
         const inp = document.getElementById('inputContainer');
         inp.innerHTML = `<div class="choice-grid"></div>`;
         const grid = inp.querySelector('.choice-grid');
         
-        let opts = [content.a, ...content.w].sort(()=>Math.random()-0.5);
-        
+        // Build options ensuring no duplicate values and no option equals the real answer
+        const seen = new Set();
+        function norm(v) {
+            if(v === null || typeof v === 'undefined') return '___NULL___';
+            // normalize numbers and strings similarly for equality checks
+            if(typeof v === 'number') return v.toString();
+            if(typeof v === 'string') return v.trim();
+            try { return JSON.stringify(v); } catch(e) { return String(v); }
+        }
+
+        // start with correct answer
+        const candidates = [];
+        candidates.push(content.a);
+        seen.add(norm(content.a));
+
+        // ensure wrong options are distinct and not equal to the answer; if collision, replace with generated distractor
+        (content.w || []).forEach(w => {
+            let val = w;
+            let n = norm(val);
+            if(seen.has(n)) {
+                // generate a fallback distractor
+                if(typeof content.a === 'number' || (!isNaN(parseFloat(String(content.a))))) {
+                    const base = Number(content.a);
+                    const delta = (Math.floor(Math.random()*9)+1) * (Math.random()<0.5?-1:1);
+                    val = base + delta;
+                } else {
+                    // string distractor: append a small tag
+                    val = String(content.a) + ' (alt ' + (Math.floor(Math.random()*90)+10) + ')';
+                }
+                n = norm(val);
+            }
+            // if still duplicate, keep generating small changes until unique
+            let attempts = 0;
+            while(seen.has(n) && attempts < 8) {
+                attempts++;
+                if(typeof content.a === 'number' || (!isNaN(parseFloat(String(content.a))))) {
+                    const base = Number(content.a);
+                    val = base + (attempts * (attempts % 2 ? 1 : -1));
+                } else {
+                    val = String(content.a) + ' (' + Math.floor(Math.random()*900+100) + ')';
+                }
+                n = norm(val);
+            }
+            seen.add(n);
+            candidates.push(val);
+        });
+
+        // If we have fewer options than buttons needed, generate more distractors
+        while(candidates.length < 4) {
+            let g;
+            if(typeof content.a === 'number' || (!isNaN(parseFloat(String(content.a))))) {
+                const base = Number(content.a);
+                g = base + (Math.floor(Math.random()*20)-10);
+                if(g === base) g = base + 7;
+            } else {
+                g = String(content.a) + ' (' + Math.floor(Math.random()*900+100) + ')';
+            }
+            const ng = norm(g);
+            if(!seen.has(ng)) { seen.add(ng); candidates.push(g); }
+        }
+
+        // shuffle options
+        const opts = candidates.sort(()=>Math.random()-0.5).slice(0,4);
+
         opts.forEach(opt => {
             let btn = document.createElement('button');
             btn.className = 'ans-btn';
             btn.innerHTML = this.formatMath(opt);
-            btn.onclick = () => this.handleAnswer(opt == content.a);
+            btn.onclick = () => this.handleAnswer(norm(opt) == norm(content.a));
             grid.appendChild(btn);
         });
 
-        if(window.MathJax && window.MathJax.typesetPromise) window.MathJax.typesetPromise().catch(()=>{});
+        this.typesetMath();
 
         this.run.timeLeft = this.run.timerMax;
         clearInterval(this.run.timerInterval);
@@ -555,13 +624,60 @@ const Game = {
         this.run.timerInterval = setInterval(() => {
             if(!this.run.freeze) this.run.timeLeft--;
             this.renderTimer();
-            if(this.run.timeLeft <= 0) this.handleAnswer(false);
+            if(this.run.timeLeft <= 0) this.onTimeOut();
         }, 1000);
         
         this.updateHUD();
     },
 
     handleAnswer(isCorrect) {
+        // If a boss encounter is active, correct answers damage the boss instead
+        if(this.run.boss) {
+            if(isCorrect) {
+                const evt = this.run.boss.meta.event || 'boss';
+                // use configured damage per hit (set by EventFramework and tunable via game.eventSettings)
+                let dmg = this.run.boss.meta.dmgPerHit || 8;
+                // small per-event adjustments
+                if(evt === 'mini' && !this.run.boss.meta.dmgPerHit) dmg = 5;
+                if(evt === 'elite' && !this.run.boss.meta.dmgPerHit) dmg = 14;
+
+                this.run.boss.meta.hp -= dmg;
+                // show immediate feedback
+                document.getElementById('gameHUD').style.backgroundColor = "rgba(46, 204, 113, 0.2)";
+                setTimeout(() => document.getElementById('gameHUD').style.backgroundColor = "rgba(0,0,0,0.4)" , 180);
+
+                // update boss HUD
+                const chainHud = document.getElementById('hudChain');
+                if(chainHud) chainHud.innerText = `BOSS: ${evt.toUpperCase()} HP ${Math.max(0,this.run.boss.meta.hp)}/${this.run.boss.meta.maxHp}`;
+
+                if(this.run.boss.meta.hp <= 0) {
+                    // boss defeated
+                    this.run.gold += (this.run.boss.meta.reward && this.run.boss.meta.reward.gold) ? this.run.boss.meta.reward.gold : 5;
+                    this.run.score += 1;
+                    // small celebration flash
+                    document.body.style.background = "#0a0";
+                    setTimeout(()=>document.body.style.background="var(--bg)", 250);
+                    // clear boss state and hide HUD
+                    this.run.boss = null;
+                    if(chainHud) chainHud.style.display = 'none';
+                    // proceed after short delay to show result
+                    setTimeout(() => this.nextQ(), 350);
+                } else {
+                    // continue with next boss question
+                    setTimeout(() => this.nextQ(), 300);
+                }
+            } else {
+                // wrong answer during boss: lose a heart as usual
+                this.run.hp--;
+                document.body.style.background = "#500";
+                setTimeout(()=>document.body.style.background="var(--bg)", 200);
+                if(this.run.hp <= 0) this.gameOver();
+                else this.updateHUD();
+            }
+            return;
+        }
+
+        // Normal answer handling
         if(isCorrect) {
             this.run.score++;
             this.run.gold += Math.floor(10 * this.run.goldMulti);
@@ -593,6 +709,30 @@ const Game = {
         let pct = (this.run.timeLeft / this.run.timerMax) * 100;
         const bar = document.getElementById('timerBar');
         if(bar) bar.style.width = pct + "%";
+    },
+
+    // Called when the run timer reaches zero to handle losing a heart without immediate multi-kill
+    onTimeOut() {
+        // stop timer to avoid multiple triggers
+        clearInterval(this.run.timerInterval);
+        this.run.timerInterval = null;
+        // lose one heart
+        this.run.hp--;
+        this.updateHUD();
+        if(this.run.hp <= 0) {
+            return this.gameOver();
+        }
+        // grant extra time when a heart is lost to give player a chance
+        this.run.timeLeft = Math.max(5, Math.floor(this.run.timerMax / 2));
+        this.renderTimer();
+        // small delay before resuming timer to avoid immediate re-trigger
+        setTimeout(() => {
+            this.run.timerInterval = setInterval(() => {
+                if(!this.run.freeze) this.run.timeLeft--;
+                this.renderTimer();
+                if(this.run.timeLeft <= 0) this.onTimeOut();
+            }, 1000);
+        }, 500);
     },
 
     gameOver() {
@@ -665,7 +805,7 @@ const Game = {
         this.run.timerInterval = setInterval(() => {
             if(!this.run.freeze) this.run.timeLeft--;
             this.renderTimer();
-            if(this.run.timeLeft <= 0) this.handleAnswer(false);
+            if(this.run.timeLeft <= 0) this.onTimeOut();
         }, 1000);
     },
     quitRun() {

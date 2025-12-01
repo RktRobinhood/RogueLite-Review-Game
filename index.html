@@ -6,6 +6,13 @@
     <title>Knowledge Rogue: v21</title>
     <link rel="stylesheet" href="style.css">
     <!-- Load MathJax -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$','$'], ['\\(','\\)']]
+            }
+        };
+    </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
@@ -106,7 +113,7 @@
         </div>
 
         <!-- Small Game Avatar -->
-        <div class="avatar-box" style="transform: scale(0.6); margin:0; position: absolute; top: 5px; right: 10px;">
+          <div class="avatar-box">
              <div class="base-part base-legs"></div>
              <div class="base-part base-torso"></div>
              <div class="base-part base-head" id="g-face">😐</div>
@@ -115,7 +122,7 @@
              <div class="layer l-head" id="g-head"></div>
              <div class="layer l-off" id="g-off"></div>
              <div class="layer l-main" id="g-main"></div>
-        </div>
+          </div>
 
         <div class="gear-icon" onclick="Game.pauseGame()" style="top:15px; right:15px;">⚙️</div>
     </div>
@@ -160,6 +167,7 @@
 <script src="engine.js"></script>
 <!-- Load Content -->
 <script src="content/full_math_bank.js"></script>
+<script src="content/event_framework.js"></script>
 
 </body>
 </html>
