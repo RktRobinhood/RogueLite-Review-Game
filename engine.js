@@ -29,6 +29,13 @@ const Game = {
         // Wait a tick for scripts to register
         await new Promise(r => setTimeout(r, 200));
 
+        // Runtime migration: populate `tags` on each question from available fields
+        // This keeps the disk unchanged but ensures the engine has clear tagging to target
+        try {
+            this.migrateTagsInLibrary();
+        } catch (e) {
+            console.warn('migrateTagsInLibrary failed', e);
+        }
         if(this.library.length === 0) {
             console.warn("Engine: Library empty. Injecting Emergency Backup.");
             this.injectEmergencyQuestions();
@@ -73,6 +80,27 @@ const Game = {
         } catch(e) {
             console.error('Engine: Error registering pack', pack && pack.id, e);
         }
+    },
+
+    // --- Tag migration helpers ---
+    migrateTagsInLibrary() {
+        if(!Array.isArray(this.library)) return;
+        this.library.forEach(q => {
+            // If tags already present and non-empty, keep them
+            if(Array.isArray(q.tags) && q.tags.length > 0) return;
+
+            // Prefer legacy fields if present, else fall back to subject/topic
+            const parts = [];
+            if(q.legacySubject) parts.push(String(q.legacySubject).trim());
+            else if(q.subject) parts.push(String(q.subject).trim());
+            if(q.legacyTopic) parts.push(String(q.legacyTopic).trim());
+            else if(q.topic) parts.push(String(q.topic).trim());
+
+            // Normalize: remove empty, convert to title-case-ish
+            const norm = parts.filter(p => p && p.length > 0).map(p => p.replace(/\s+/g,' ').trim());
+            q.tags = norm.length > 0 ? norm : [];
+        });
+        console.log('Engine: migrateTagsInLibrary completed. Sample tags:', this.library.slice(0,5).map(q=>q.tags));
     },
 
     // --- DATA & SAVES ---
@@ -144,8 +172,8 @@ const Game = {
         const cnt = document.getElementById('activeSubjectCount'); if(cnt) cnt.innerText = (this.config.activeFiles || []).length;
     },
     renderAvatar(which='p') {
-        // which: 'p' = menu/avatar, 'g' = game small avatar
-        const prefix = which === 'g' ? 'g' : 'p';
+        // which: 'p' = menu/avatar, 'g' = game small avatar, 'shop' = shop preview avatar
+        const prefix = which === 'g' ? 'g' : (which === 'shop' ? 'shop' : 'p');
         const faceId = prefix + '-face';
         const headId = prefix + '-head';
         const bodyId = prefix + '-body';
@@ -294,6 +322,8 @@ const Game = {
                 });
             });
         }
+        // Ensure the shop avatar preview is populated with current gear
+        try { this.renderAvatar('shop'); } catch(e) { console.warn('renderShops: renderAvatar(shop) failed', e); }
     },
 
     buyUpgrade(stat) {
@@ -373,9 +403,23 @@ const Game = {
 
     // --- GAMEPLAY LOOP ---
     startRun() {
-        // Filter deck by active files
-        let deck = this.library.filter(q => this.config.activeFiles.includes(q._src));
-        if(deck.length === 0) deck = this.library; // Fallback
+        // Filter deck by active topics (if set) or by active files
+        let deck = [];
+        // Prefer tag-based filtering when available
+        const hasTagFilters = Array.isArray(this.config.activeTags) && this.config.activeTags.length > 0;
+        const hasTopicFilters = this.config.activeTopics && Object.keys(this.config.activeTopics).length > 0;
+        if(hasTagFilters) {
+            deck = this.library.filter(q => Array.isArray(q.tags) && q.tags.some(t => this.config.activeTags.includes(t)));
+        } else if(hasTopicFilters) {
+            deck = this.library.filter(q => {
+                const subj = q.subject || q.legacySubject || 'General';
+                const topic = q.topic || q.legacyTopic || 'Misc';
+                return this.config.activeTopics[subj] && this.config.activeTopics[subj].includes(topic);
+            });
+        } else {
+            deck = this.library.filter(q => this.config.activeFiles.includes(q._src));
+        }
+        if(deck.length === 0) deck = this.library; // Fallback to full library
 
         // Apply Gear Stats
         let gearStats = { hp:0, time:0, gold:0 };
@@ -760,34 +804,151 @@ const Game = {
 
     
     // --- SETTINGS ---
-    openSettings() { 
-        this.safeClassRemove('settingsOverlay', 'hidden'); 
+    openSettings() {
+        this.safeClassRemove('settingsOverlay', 'hidden');
         const area = document.getElementById('settingsArea');
-        area.innerHTML = "";
-        
-        let sources = [...new Set(this.library.map(q => q._src))];
-        
-        sources.forEach(src => {
-             let isActive = this.config.activeFiles.includes(src);
-             let div = document.createElement('div');
-             div.className = "setting-row";
-             let meta = this.manifest.find(m=>m.id===src) || {name: src.toUpperCase()};
-             
-             div.innerHTML = `<span>${meta.name}</span> <div class="toggle-btn ${isActive?'active':''}" onclick="Game.toggleFile('${src}', this)"></div>`;
-             area.appendChild(div);
+        area.innerHTML = '';
+
+        // Build tag list (preferred) or fallback to subjects->topics mapping
+        const tagSet = new Set();
+        this.library.forEach(q => {
+            // Ensure tags exist (runtime migration should have populated them)
+            if(!Array.isArray(q.tags)) q.tags = [];
+            q.tags.forEach(t => { if(t && t.length) tagSet.add(t); });
         });
+
+        const useTags = tagSet.size > 0;
+
+        // Ensure config structures
+        this.config.activeTags = this.config.activeTags || [];
+        this.config.activeTopics = this.config.activeTopics || {};
+
+        // Ensure config activeTopics exists
+        this.config.activeTopics = this.config.activeTopics || {};
+
+        if(useTags) {
+            // Build a simple tag list with checkboxes
+            const tags = Array.from(tagSet).sort();
+            const wrapper = document.createElement('div');
+            wrapper.className = 'subject-panel';
+            tags.forEach(t => {
+                const row = document.createElement('div');
+                row.className = 'setting-row';
+                const checked = this.config.activeTags.includes(t) ? 'checked' : '';
+                row.innerHTML = `<label class="topic-label"><input type="checkbox" ${checked} onchange="Game.toggleTag('${t.replace(/'/g, "\\'")}', this)"> ${t}</label>`;
+                wrapper.appendChild(row);
+            });
+            const ctrl = document.createElement('div');
+            ctrl.style = 'margin-top:6px;';
+            ctrl.innerHTML = `<button class="small-btn" onclick="Game.selectAllTags()">Select All</button> <button class="small-btn" onclick="Game.clearAllTags()">Clear</button>`;
+            wrapper.appendChild(ctrl);
+            area.appendChild(wrapper);
+        } else {
+            // Fallback to previous subject->topic UI
+            const subjMap = {};
+            this.library.forEach(q => {
+                const s = q.subject || q.legacySubject || 'General';
+                const t = q.topic || q.legacyTopic || 'Misc';
+                subjMap[s] = subjMap[s] || new Set();
+                subjMap[s].add(t);
+            });
+
+            const tabs = document.createElement('div');
+            tabs.className = 'settings-tabs';
+            Object.keys(subjMap).forEach((subj, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+                btn.innerText = subj;
+                btn.dataset.subj = subj;
+                btn.onclick = () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.querySelectorAll('.subject-panel').forEach(p => p.classList.add('hidden'));
+                    const panel = document.getElementById('panel-' + subj.replace(/\s+/g, '_'));
+                    if(panel) panel.classList.remove('hidden');
+                };
+                tabs.appendChild(btn);
+            });
+            area.appendChild(tabs);
+
+            Object.keys(subjMap).forEach((subj, idx) => {
+                const panel = document.createElement('div');
+                panel.className = 'subject-panel' + (idx === 0 ? '' : ' hidden');
+                panel.id = 'panel-' + subj.replace(/\s+/g, '_');
+                const topics = Array.from(subjMap[subj]).sort();
+                topics.forEach(t => {
+                    const row = document.createElement('div');
+                    row.className = 'setting-row';
+                    const checked = (this.config.activeTopics[subj] && this.config.activeTopics[subj].includes(t)) ? 'checked' : '';
+                    row.innerHTML = `<label class="topic-label"><input type="checkbox" ${checked} onchange="Game.toggleTopic('${subj.replace(/'/g, "\\'")}', '${t.replace(/'/g, "\\'")}', this)"> ${t}</label>`;
+                    panel.appendChild(row);
+                });
+                const ctrl = document.createElement('div');
+                ctrl.style = 'margin-top:6px;';
+                ctrl.innerHTML = `<button class="small-btn" onclick="Game.selectAllTopics('${subj.replace(/'/g, "\\'")}')">Select All</button> <button class="small-btn" onclick="Game.clearAllTopics('${subj.replace(/'/g, "\\'")}')">Clear</button>`;
+                panel.appendChild(ctrl);
+                area.appendChild(panel);
+            });
+        }
+    },
+
+    // Tag toggles for settings
+    toggleTag(tag, checkbox) {
+        this.config.activeTags = this.config.activeTags || [];
+        if(checkbox.checked) {
+            if(!this.config.activeTags.includes(tag)) this.config.activeTags.push(tag);
+        } else {
+            this.config.activeTags = this.config.activeTags.filter(x => x !== tag);
+        }
+    },
+    selectAllTags() {
+        const checks = Array.from(document.querySelectorAll('#settingsArea input[type="checkbox"]'));
+        this.config.activeTags = [];
+        checks.forEach(c => { c.checked = true; const label = c.parentElement.innerText.trim(); this.config.activeTags.push(label); });
+    },
+    clearAllTags() {
+        const checks = Array.from(document.querySelectorAll('#settingsArea input[type="checkbox"]'));
+        checks.forEach(c => c.checked = false);
+        this.config.activeTags = [];
     },
     toggleFile(id, btn) {
         if(this.config.activeFiles.includes(id)) {
-            this.config.activeFiles = this.config.activeFiles.filter(x=>x!==id);
+            this.config.activeFiles = this.config.activeFiles.filter(x => x !== id);
             btn.classList.remove('active');
         } else {
             this.config.activeFiles.push(id);
             btn.classList.add('active');
         }
     },
+    toggleTopic(subject, topic, checkbox) {
+        this.config.activeTopics = this.config.activeTopics || {};
+        this.config.activeTopics[subject] = this.config.activeTopics[subject] || [];
+        if(checkbox.checked) {
+            if(!this.config.activeTopics[subject].includes(topic)) this.config.activeTopics[subject].push(topic);
+        } else {
+            this.config.activeTopics[subject] = this.config.activeTopics[subject].filter(x => x !== topic);
+            if(this.config.activeTopics[subject].length === 0) delete this.config.activeTopics[subject];
+        }
+    },
+    selectAllTopics(subject) {
+        const panel = document.getElementById('panel-' + subject.replace(/\s+/g, '_'));
+        if(!panel) return;
+        const checks = panel.querySelectorAll('input[type="checkbox"]');
+        this.config.activeTopics = this.config.activeTopics || {};
+        this.config.activeTopics[subject] = [];
+        checks.forEach(c => { c.checked = true; const label = c.parentElement.innerText.trim(); this.config.activeTopics[subject].push(label); });
+    },
+    clearAllTopics(subject) {
+        const panel = document.getElementById('panel-' + subject.replace(/\s+/g, '_'));
+        if(!panel) return;
+        const checks = panel.querySelectorAll('input[type="checkbox"]');
+        checks.forEach(c => c.checked = false);
+        if(this.config.activeTopics) delete this.config.activeTopics[subject];
+    },
     closeSettings() {
-        if(this.config.activeFiles.length === 0) return alert("Select 1!");
+        const hasFiles = this.config.activeFiles && this.config.activeFiles.length > 0;
+        const hasTopics = this.config.activeTopics && Object.keys(this.config.activeTopics).length > 0;
+        if(!hasFiles && !hasTopics) return alert('Select at least one module or topic!');
         this.saveConfig();
         this.safeClassAdd('settingsOverlay', 'hidden');
         location.reload();

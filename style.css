@@ -57,6 +57,20 @@ body { margin:0; overflow:hidden; background:var(--bg); font-family:'Segoe UI',T
     background: rgba(21, 21, 26, 0.6); /* Semi-transparent dark to see avatar faintly but read text */
     backdrop-filter: blur(2px);
 }
+
+/* Shop avatar preview - visible in shop so players can see equipped gear */
+.shop-avatar-preview { display:flex; gap:8px; align-items:center; justify-content:flex-start; color:#fff; position:absolute; right:12px; top:12px; z-index:60; background:rgba(0,0,0,0.35); border-radius:8px; padding:10px; }
+.shop-avatar-preview .base-part { font-size:2.2rem; }
+.shop-avatar-preview .layer { font-size:2.2rem; }
+
+/* Settings UI tabs and topic list */
+.settings-tabs { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+.tab-btn { background:transparent; border:1px solid #444; color:#ddd; padding:6px 8px; border-radius:6px; cursor:pointer; }
+.tab-btn.active { background:var(--panel); border-color:var(--accent); color:var(--accent); }
+.subject-panel { padding:6px 0; }
+.subject-panel.hidden { display:none; }
+.topic-label { color:#ddd; font-size:0.9rem; display:block; margin:6px 0; }
+.small-btn { background:#333; border:1px solid #444; color:#ddd; padding:4px 8px; border-radius:6px; cursor:pointer; margin-right:6px; }
 .shop-nav { display:flex; width:100%; background:rgba(0,0,0,0.6); border-bottom:1px solid #333; }
 .nav-btn { flex:1; background:transparent; border:none; color:#aaa; padding:15px 0; font-weight:bold; cursor:pointer; border-bottom:3px solid transparent; }
 .nav-btn.active { color:white; border-bottom-color:var(--accent); background:rgba(255,255,255,0.05); }
